@@ -6,7 +6,7 @@
              xmlns:local="clr-namespace:ToolKitV.Views"
              mc:Ignorable="d">
 
-    <Grid Margin="28 20 28 20">
+    <Grid Margin="28 20 28 20" AllowDrop="True" Drop="UIElement_OnDrop">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="380"/>
             <ColumnDefinition Width="24"/>

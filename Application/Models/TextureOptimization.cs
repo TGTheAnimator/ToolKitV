@@ -227,7 +227,7 @@ namespace ToolkitV.Models
 
         // ─── Single-texture optimisation ────────────────────────────────────────
 
-        private static Texture OptimizeTexture(Texture texture, bool formatOptimization, bool downsize)
+        private static Texture OptimizeTexture(Texture texture, bool formatOptimization, bool downsize, bool autoDownscale4K)
         {
             // Clamp mip levels to the valid maximum for this texture's dimensions.
             texture.Levels = ClampMipLevels(texture);
@@ -244,6 +244,16 @@ namespace ToolkitV.Models
                     // Halve dimensions but guard against going below 4px (BC block minimum).
                     texture.Width  = (ushort)Math.Max(4, texture.Width  / 2);
                     texture.Height = (ushort)Math.Max(4, texture.Height / 2);
+                    texture.Levels = ClampMipLevels(texture);
+                }
+                else if (autoDownscale4K)
+                {
+                    // Reduce anything > 2048 to a max of 2048
+                    while (texture.Width > 2048 || texture.Height > 2048)
+                    {
+                        texture.Width  = (ushort)Math.Max(4, texture.Width  / 2);
+                        texture.Height = (ushort)Math.Max(4, texture.Height / 2);
+                    }
                     texture.Levels = ClampMipLevels(texture);
                 }
 
@@ -363,6 +373,7 @@ namespace ToolkitV.Models
             bool     onlyOverSized,
             bool     downsize,
             bool     formatOptimization,
+            bool     autoDownscale4K,
             Delegate optimizeProgressHandler)
         {
             ResultsData results = new();
@@ -440,7 +451,7 @@ namespace ToolkitV.Models
                         ytdChanged = true;
 
                         log.LogWrite($"  Optimising texture: {texture.Name} ({texture.Width}x{texture.Height}, {texture.Format})");
-                        ytdFile.TextureDict.Textures.data_items[j] = OptimizeTexture(texture, formatOptimization, downsize);
+                        ytdFile.TextureDict.Textures.data_items[j] = OptimizeTexture(texture, formatOptimization, downsize, autoDownscale4K);
                         results.filesOptimized++;
                     }
                 }

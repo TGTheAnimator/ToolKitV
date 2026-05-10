@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,6 +16,7 @@ namespace ToolKitV.Views
         public bool   OnlyOverSizedToogled { get; set; } = false;
         public bool   DownSizeValue    { get; set; } = true;
         public bool   FormatOptimizeValue  { get; set; } = false;
+        public bool   AutoDownscale4KValue { get; set; } = true;
 
         public TextureOptimization()
         {
@@ -83,6 +85,18 @@ namespace ToolKitV.Views
             FixScriptRtButton.IsButtonEnabled = ok;
         }
 
+        private void UIElement_OnDrop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files != null && files.Length > 0 && Directory.Exists(files[0]))
+                {
+                    MainFolder.Path = files[0];
+                }
+            }
+        }
+
         private void OnBackupPathChanged(object sender, PropertyChangedEventArgs e)
             => BackupPath = BackupFolder.Path;
 
@@ -97,6 +111,9 @@ namespace ToolKitV.Views
 
         private void FormatOptimize_PropertyChanged(object sender, PropertyChangedEventArgs e)
             => FormatOptimizeValue = FormatOptimize.IsToogled;
+
+        private void AutoDownscale4K_PropertyChanged(object sender, PropertyChangedEventArgs e)
+            => AutoDownscale4KValue = AutoDownscale4K.IsToogled;
 
         // ─── Button actions ──────────────────────────────────────────────────────
 
@@ -115,10 +132,10 @@ namespace ToolKitV.Views
 
         private async void OptimizeButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!DownSizeValue && !FormatOptimizeValue)
+            if (!DownSizeValue && !FormatOptimizeValue && !AutoDownscale4KValue)
             {
                 MessageBox.Show(
-                    "Please enable at least one optimization option:\n• Downsize (÷2)\n• Format Optimization (BC7/BC1/BC4)",
+                    "Please enable at least one optimization option:\n• Downsize (÷2)\n• Format Optimization (BC7/BC1/BC4)\n• Auto-Downscale 4K",
                     "TGToolKit — Nothing to do",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -135,7 +152,7 @@ namespace ToolKitV.Views
             // Run the optimization.
             await Task.Run(() => Optimize(
                 MainPath, BackupPath, OptimizeSizeValue,
-                OnlyOverSizedToogled, DownSizeValue, FormatOptimizeValue,
+                OnlyOverSizedToogled, DownSizeValue, FormatOptimizeValue, AutoDownscale4KValue,
                 OptimizeProgressHandler));
 
             // Gather post-optimization stats.

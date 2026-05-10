@@ -24,6 +24,18 @@ namespace ToolKitV.Views
             RunAuditButton.IsButtonEnabled = !string.IsNullOrWhiteSpace(_resourcePath) && Directory.Exists(_resourcePath);
         }
 
+        private void UIElement_OnDrop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files != null && files.Length > 0 && Directory.Exists(files[0]))
+                {
+                    ResourceFolder.Path = files[0];
+                }
+            }
+        }
+
         private async void RunAuditButton_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(_resourcePath) || !Directory.Exists(_resourcePath)) return;

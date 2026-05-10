@@ -7,7 +7,7 @@
              mc:Ignorable="d">
 
     <!-- Root: 3-column layout — settings | divider | stats -->
-    <Grid Margin="28 20 28 20">
+    <Grid Margin="28 20 28 20" AllowDrop="True" Drop="UIElement_OnDrop">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="380"/>
             <ColumnDefinition Width="24"/>
@@ -111,6 +111,14 @@
                         Title="Format Optimization  (BC7 / BC1 / BC4)"
                         Description="Re-encodes to best block format: BC7 for RGBA, BC1 for RGB, BC4 for grayscale. Minimal quality loss."
                         PropertyChanged="FormatOptimize_PropertyChanged"
+                        Margin="0 8 0 0"/>
+
+                    <local:ToogleButton
+                        x:Name="AutoDownscale4K"
+                        Title="Auto-Downscale 4K Textures"
+                        Description="Automatically perfectly halves the resolution of any massive 4K livery to 2048x2048. Strongly recommended."
+                        PropertyChanged="AutoDownscale4K_PropertyChanged"
+                        IsToogled="True"
                         Margin="0 8 0 0"/>
 
                     <!-- ─── Section: Crash Fixes ─── -->

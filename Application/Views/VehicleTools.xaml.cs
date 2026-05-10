@@ -34,6 +34,18 @@ namespace ToolKitV.Views
             RefreshButtonState();
         }
 
+        private void UIElement_OnDrop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files != null && files.Length > 0 && Directory.Exists(files[0]))
+                {
+                    ResourceFolder.Path = files[0];
+                }
+            }
+        }
+
         private void OnBackupPathChanged(object sender, PropertyChangedEventArgs e)
         {
             _backupPath = BackupFolder.Path;
