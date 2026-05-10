@@ -21,12 +21,14 @@ namespace ToolKitV.Views
 
         private void OnResourcePathChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (ResourceFolder == null) return;
             _resourcePath = ResourceFolder.Path;
             ValidateInputs();
         }
 
         private void OnPackSettingsChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (PackNameInput == null || PedTargetInput == null) return;
             _packName = PackNameInput.TextValue;
             _pedTarget = PedTargetInput.TextValue;
             ValidateInputs();
@@ -34,6 +36,7 @@ namespace ToolKitV.Views
 
         private void ValidateInputs()
         {
+            if (GenerateButton == null) return;
             GenerateButton.IsButtonEnabled = !string.IsNullOrWhiteSpace(_resourcePath) && Directory.Exists(_resourcePath) && !string.IsNullOrWhiteSpace(_packName);
         }
 

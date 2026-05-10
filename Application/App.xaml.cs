@@ -46,8 +46,9 @@ namespace ToolKitV
 
         private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
+            System.IO.File.WriteAllText("crash.log", e.Exception.ToString());
             MessageBox.Show(
-                "An unexpected error occurred:\n\n" + e.Exception.Message
+                "An unexpected error occurred:\n\n" + e.Exception.ToString()
                 + "\n\nCheck log.txt in the application folder for details.",
                 "TGToolKit — Error",
                 MessageBoxButton.OK,

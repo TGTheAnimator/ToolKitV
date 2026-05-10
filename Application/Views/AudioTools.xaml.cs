@@ -20,18 +20,21 @@ namespace ToolKitV.Views
 
         private void OnResourcePathChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (ResourceFolder == null) return;
             _resourcePath = ResourceFolder.Path;
             ValidateInputs();
         }
 
         private void OnSettingsChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (DownsampleAudio == null) return;
             _downsampleEnabled = DownsampleAudio.IsToogled;
             ValidateInputs();
         }
 
         private void ValidateInputs()
         {
+            if (OptimizeButton == null) return;
             OptimizeButton.IsButtonEnabled = !string.IsNullOrWhiteSpace(_resourcePath) && Directory.Exists(_resourcePath) && _downsampleEnabled;
         }
 
