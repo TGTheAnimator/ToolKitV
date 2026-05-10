@@ -52,6 +52,13 @@ namespace ToolKitV.Views
             NavigateTo?.Invoke("ClothingTools");
         }
 
+        private void AudioTools_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_activeView == "AudioTools") return;
+            SetActiveItem("AudioTools");
+            NavigateTo?.Invoke("AudioTools");
+        }
+
         // ── Visual state ──────────────────────────────────────────────────────
 
         private void SetActiveItem(string view)
@@ -62,6 +69,7 @@ namespace ToolKitV.Views
             bool vehiclesActive = view == "VehicleTools";
             bool assetActive    = view == "AssetAnalyzer";
             bool clothingActive = view == "ClothingTools";
+            bool audioActive    = view == "AudioTools";
 
             // Texture Optimizer item
             TextureOptimizerBg.Visibility         = texActive ? Visibility.Visible   : Visibility.Collapsed;
@@ -96,6 +104,15 @@ namespace ToolKitV.Views
             ClothingToolsStripe.Visibility     = clothingActive ? Visibility.Visible   : Visibility.Collapsed;
             ClothingToolsLabel.FontWeight      = clothingActive ? FontWeights.Bold     : FontWeights.Normal;
             ClothingToolsLabel.Foreground      = clothingActive
+                ? new SolidColorBrush(Colors.White)
+                : new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
+
+            // Audio Tools item
+            AudioToolsBg.Visibility         = audioActive ? Visibility.Visible   : Visibility.Collapsed;
+            AudioToolsInactiveBg.Visibility = audioActive ? Visibility.Collapsed : Visibility.Visible;
+            AudioToolsStripe.Visibility     = audioActive ? Visibility.Visible   : Visibility.Collapsed;
+            AudioToolsLabel.FontWeight      = audioActive ? FontWeights.Bold     : FontWeights.Normal;
+            AudioToolsLabel.Foreground      = audioActive
                 ? new SolidColorBrush(Colors.White)
                 : new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
         }

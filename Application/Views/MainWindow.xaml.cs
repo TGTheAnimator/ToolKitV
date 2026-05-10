@@ -11,6 +11,7 @@ namespace ToolKitV
         private readonly VehicleTools        _vehicleView  = new();
         private readonly AssetAnalyzer       _assetView    = new();
         private readonly ClothingTools       _clothingView = new();
+        private readonly AudioTools          _audioView    = new();
 
         public MainWindow()
         {
@@ -45,6 +46,11 @@ namespace ToolKitV
                 case "ClothingTools":
                     MainContent.Content  = _clothingView;
                     AppSubtitle.Text     = "  Add-on Clothing Generator";
+                    break;
+
+                case "AudioTools":
+                    MainContent.Content  = _audioView;
+                    AppSubtitle.Text     = "  AWC Audio Optimizer";
                     break;
             }
         }
