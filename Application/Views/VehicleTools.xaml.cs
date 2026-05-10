@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using ToolKitV.Models;
 using static ToolKitV.Models.VehicleMetaMerger;
 
 namespace ToolKitV.Views
@@ -53,12 +54,14 @@ namespace ToolKitV.Views
             bool ok = CanProceed();
             ScanButton.IsButtonEnabled  = ok;
             MergeButton.IsButtonEnabled = ok;
+            ScanModelsButton.IsButtonEnabled = ok;
         }
 
         private void SetBusy(bool busy)
         {
             ScanButton.IsButtonEnabled  = !busy && CanProceed();
             MergeButton.IsButtonEnabled = !busy && CanProceed();
+            ScanModelsButton.IsButtonEnabled = !busy && CanProceed();
         }
 
         // ── Scan (dry run — discovery only, no writes) ────────────────────────
@@ -185,7 +188,78 @@ namespace ToolKitV.Views
             };
         }
 
+        // ── Scan YFT Models ───────────────────────────────────────────────────
+
+        private async void ScanModelsButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetBusy(true);
+            ScanModelsButton.Title = "Scanning Models...";
+            ResetModelScanDisplay();
+
+            ModelScanner.ScanResults results = null;
+
+            await Task.Run(() =>
+            {
+                results = ModelScanner.ScanDirectory(_resourcePath, new Action<int, int, int>((progress, current, total) =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        ScanModelsButton.SetProgress(progress);
+                        ScanModelsButton.Title = $"Scanning {current}/{total}...";
+                    });
+                }));
+            });
+
+            if (results != null)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    ModelScanTotal.Text = results.TotalFilesScanned.ToString();
+                    ModelScanSafe.Text = results.SafeFiles.ToString();
+                    ModelScanWarnings.Text = results.WarningFiles.ToString();
+                    ModelScanCritical.Text = results.CriticalFiles.ToString();
+
+                    if (results.CriticalFiles > 0)
+                    {
+                        MessageBox.Show(
+                            $"Found {results.CriticalFiles} critical model(s) exceeding GTA V engine limits! These will cause the 'georgia-alaska-october' crash.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
+                            "TGToolKit — Critical Models Found",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                    }
+                    else if (results.WarningFiles > 0)
+                    {
+                        MessageBox.Show(
+                            $"Found {results.WarningFiles} heavy model(s). They might not crash the game but can cause instability or FPS drops.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
+                            "TGToolKit — Heavy Models Found",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
+                    else if (results.TotalFilesScanned > 0)
+                    {
+                        MessageBox.Show(
+                            $"All {results.TotalFilesScanned} scanned models are within safe limits. Your server shouldn't crash from these geometries.",
+                            "TGToolKit — Scan Complete",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                    }
+                });
+            }
+
+            ScanModelsButton.Title = "Scan YFT Models";
+            ScanModelsButton.ResetProgress();
+            SetBusy(false);
+        }
+
         // ── UI helpers ────────────────────────────────────────────────────────
+
+        private void ResetModelScanDisplay()
+        {
+            ModelScanTotal.Text    = "—";
+            ModelScanSafe.Text     = "—";
+            ModelScanWarnings.Text = "—";
+            ModelScanCritical.Text = "—";
+        }
 
         private void ResetResultsDisplay()
         {

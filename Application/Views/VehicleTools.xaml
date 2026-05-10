@@ -24,15 +24,22 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <local:Button x:Name="MergeButton"
+                <local:Button x:Name="ScanModelsButton"
                               Grid.Column="0"
-                              Title="Merge"
+                              Title="Scan YFT Models"
+                              IsButtonEnabledValue="False"
+                              Click="ScanModelsButton_Click"/>
+
+                <local:Button x:Name="MergeButton"
+                              Grid.Column="2"
+                              Title="Merge Meta"
                               IsButtonEnabledValue="False"
                               Click="MergeButton_Click"/>
+            </Grid>
 
+            <Grid DockPanel.Dock="Bottom" Margin="0 16 0 0">
                 <local:Button x:Name="ScanButton"
-                              Grid.Column="2"
-                              Title="Scan"
+                              Title="Scan Meta Files"
                               IsButtonEnabledValue="False"
                               Click="ScanButton_Click"/>
             </Grid>
@@ -255,6 +262,54 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Status" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
                         <TextBlock x:Name="ResultStatus" Grid.Column="1" Text="—" Foreground="#4CFF70" FontFamily="Fonts/#TT Norms" FontSize="12" FontWeight="Bold"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- YFT SCAN RESULTS card -->
+            <Border CornerRadius="10"
+                    BorderThickness="1"
+                    BorderBrush="#15FFFFFF"
+                    Background="#0CFFFFFF"
+                    Padding="18 14"
+                    Margin="0 16 0 0">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
+                        <Rectangle Width="3" Height="14" RadiusX="2" RadiusY="2" Margin="0 0 8 0">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#FF5555" Offset="0"/>
+                                    <GradientStop Color="#C0132A" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <TextBlock Text="YFT MODEL SCAN"
+                                   Foreground="#80FFFFFF"
+                                   FontFamily="Fonts/#TT Norms"
+                                   FontSize="10"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Grid Margin="0 0 0 5">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Models Scanned" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
+                        <TextBlock x:Name="ModelScanTotal" Grid.Column="1" Text="—" Foreground="#E0FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12" FontWeight="Bold"/>
+                    </Grid>
+                    <Grid Margin="0 0 0 5">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Safe Models" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
+                        <TextBlock x:Name="ModelScanSafe" Grid.Column="1" Text="—" Foreground="#4CFF70" FontFamily="Fonts/#TT Norms" FontSize="12" FontWeight="Bold"/>
+                    </Grid>
+                    <Grid Margin="0 0 0 5">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Warnings (> 50k verts)" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
+                        <TextBlock x:Name="ModelScanWarnings" Grid.Column="1" Text="—" Foreground="#FFA500" FontFamily="Fonts/#TT Norms" FontSize="12" FontWeight="Bold"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Critical (> 64k verts / 16MB)" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
+                        <TextBlock x:Name="ModelScanCritical" Grid.Column="1" Text="—" Foreground="#FF5555" FontFamily="Fonts/#TT Norms" FontSize="12" FontWeight="Bold"/>
                     </Grid>
                 </StackPanel>
             </Border>
