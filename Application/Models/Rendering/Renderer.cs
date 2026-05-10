@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows;
 using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
@@ -16,6 +17,8 @@ namespace ToolKitV.Rendering
         private DeviceContext _context = null!;
         private Texture2D? _renderTarget;
         private RenderTargetView? _renderTargetView;
+        private Texture2D? _depthTarget;
+        private DepthStencilView? _depthTargetView;
         private DX11ImageSource _imageSource;
 
         private VertexShader _vertexShader = null!;
@@ -24,20 +27,27 @@ namespace ToolKitV.Rendering
         
         private Buffer _constantBuffer = null!;
 
-        // Temporary storage for single model prototype
-        private Buffer? _modelVertexBuffer;
-        private Buffer? _modelIndexBuffer;
-        private int _modelIndexCount;
-        private int _vertexStride;
+        // Temporary storage for model geometries
+        private struct GeometryBuffers
+        {
+            public Buffer VertexBuffer;
+            public Buffer IndexBuffer;
+            public int IndexCount;
+            public int VertexStride;
+        }
+        private System.Collections.Generic.List<GeometryBuffers> _geometries = new();
 
         // Texture State
         private ShaderResourceView? _diffuseView;
         private SamplerState _samplerState = null!;
+        private RasterizerState _rasterizerState = null!;
 
         // Camera State
         public float CameraPitch { get; set; } = 0.5f;
         public float CameraYaw { get; set; } = 0.5f;
         public float CameraDistance { get; set; } = 5.0f;
+        private Vector3 _modelCenter = Vector3.Zero;
+        private float _modelRadius = 1.0f;
 
         struct Constants
         {
@@ -79,6 +89,19 @@ namespace ToolKitV.Rendering
             InitDX11();
             InitShaders();
             InitSampler();
+            InitRasterizer();
+        }
+
+        private void InitRasterizer()
+        {
+            var rsDesc = new RasterizerStateDescription
+            {
+                FillMode = FillMode.Solid,
+                CullMode = CullMode.None, // Cull None for prototype to ensure visibility
+                IsFrontCounterClockwise = false,
+                IsDepthClipEnabled = true
+            };
+            _rasterizerState = new RasterizerState(_device, rsDesc);
         }
 
         private void InitSampler()
@@ -123,35 +146,74 @@ namespace ToolKitV.Rendering
             _constantBuffer = new Buffer(_device, Utilities.SizeOf<Constants>(), ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
         }
 
-        public void LoadDrawable(Drawable drawable)
+        public void LoadDrawable(DrawableBase drawable)
         {
             // Clean up old model
-            _modelVertexBuffer?.Dispose();
-            _modelIndexBuffer?.Dispose();
-            _modelVertexBuffer = null;
-            _modelIndexBuffer = null;
-            _modelIndexCount = 0;
+            foreach (var g in _geometries)
+            {
+                g.VertexBuffer.Dispose();
+                g.IndexBuffer.Dispose();
+            }
+            _geometries.Clear();
 
-            if (drawable?.DrawableModels?.High == null || drawable.DrawableModels.High.Length == 0) return;
+            if (drawable == null) return;
 
-            // For prototype, we just grab the first geometry of the first LOD
-            var lod = drawable.DrawableModels.High[0];
-            if (lod.Geometries == null || lod.Geometries.Length == 0) return;
+            // Set camera targets
+            if (drawable is Drawable d)
+            {
+                _modelCenter = d.BoundingCenter;
+                _modelRadius = Math.Max(0.1f, d.BoundingSphereRadius);
+            }
+            CameraDistance = _modelRadius * 2.5f;
 
-            var geom = lod.Geometries[0];
-            var vb = geom.VertexBuffer;
-            var ib = geom.IndexBuffer;
+            if (drawable.DrawableModels == null) return;
 
-            if (vb?.Data1?.VertexBytes == null || ib?.Indices == null) return;
+            // Try to find any available LOD
+            DrawableModel[]? models = null;
+            if (drawable.DrawableModels.High != null && drawable.DrawableModels.High.Length > 0) models = drawable.DrawableModels.High;
+            else if (drawable.DrawableModels.Med != null && drawable.DrawableModels.Med.Length > 0) models = drawable.DrawableModels.Med;
+            else if (drawable.DrawableModels.Low != null && drawable.DrawableModels.Low.Length > 0) models = drawable.DrawableModels.Low;
 
-            _vertexStride = vb.VertexStride;
+            if (models == null || models.Length == 0) return;
 
-            // Create Vertex Buffer from raw bytes
-            _modelVertexBuffer = Buffer.Create(_device, BindFlags.VertexBuffer, vb.Data1.VertexBytes);
+            foreach (var lod in models)
+            {
+                if (lod.Geometries == null) continue;
+                foreach (var geom in lod.Geometries)
+                {
+                    var vb = geom.VertexBuffer;
+                    var ib = geom.IndexBuffer;
 
-            // Create Index Buffer from ushort array
-            _modelIndexBuffer = Buffer.Create(_device, BindFlags.IndexBuffer, ib.Indices);
-            _modelIndexCount = ib.Indices.Length;
+                    if (vb?.Data1 == null || ib?.Indices == null) continue;
+
+                    // Manual Decompression into clean format
+                    var vertices = new Vertex[vb.VertexCount];
+                    var vd = vb.Data1;
+                    for (int v = 0; v < vb.VertexCount; v++)
+                    {
+                        vertices[v] = new Vertex
+                        {
+                            Pos = vd.GetVector3(v, (int)VertexSemantics.Position),
+                            Norm = vd.GetVector3(v, (int)VertexSemantics.Normal),
+                            Tex = vd.GetVector2(v, (int)VertexSemantics.TexCoord0)
+                        };
+                    }
+
+                    var gb = new GeometryBuffers
+                    {
+                        VertexBuffer = Buffer.Create(_device, BindFlags.VertexBuffer, vertices),
+                        IndexBuffer = Buffer.Create(_device, BindFlags.IndexBuffer, ib.Indices),
+                        IndexCount = ib.Indices.Length,
+                        VertexStride = Utilities.SizeOf<Vertex>()
+                    };
+                    _geometries.Add(gb);
+                }
+            }
+
+            if (_geometries.Count > 0)
+            {
+                // MessageBox.Show($"Loaded {_geometries.Count} geometries.\nTotal indices: {_geometries.Sum(g => g.IndexCount)}", "Renderer Debug", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
 
             // Force rendering update
             Render();
@@ -270,32 +332,48 @@ namespace ToolKitV.Rendering
             _renderTarget = new Texture2D(_device, texDesc);
             _renderTargetView = new RenderTargetView(_device, _renderTarget);
 
+            // Create depth buffer
+            var depthDesc = new Texture2DDescription
+            {
+                Width = width,
+                Height = height,
+                Format = Format.D24_UNorm_S8_UInt,
+                ArraySize = 1,
+                BindFlags = BindFlags.DepthStencil,
+                Usage = ResourceUsage.Default,
+                CpuAccessFlags = CpuAccessFlags.None,
+                MipLevels = 1,
+                OptionFlags = ResourceOptionFlags.None,
+                SampleDescription = new SampleDescription(1, 0)
+            };
+            _depthTarget = new Texture2D(_device, depthDesc);
+            _depthTargetView = new DepthStencilView(_device, _depthTarget);
+
             // Give it to the WPF interop
             _imageSource.SetRenderTarget(_renderTarget);
         }
 
         public void Render()
         {
-            if (_renderTargetView == null) return;
+            if (_renderTargetView == null || _depthTargetView == null) return;
 
             // Clear
             _context.ClearRenderTargetView(_renderTargetView, new Color4(0.1f, 0.12f, 0.15f, 1.0f));
+            _context.ClearDepthStencilView(_depthTargetView, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1.0f, 0);
 
-            if (_modelVertexBuffer != null && _modelIndexBuffer != null)
+            if (_geometries.Count > 0)
             {
                 // Set up pipeline
                 _context.InputAssembler.InputLayout = _inputLayout;
                 _context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
-                _context.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(_modelVertexBuffer, _vertexStride, 0));
-                _context.InputAssembler.SetIndexBuffer(_modelIndexBuffer, Format.R16_UInt, 0);
-
+                
                 _context.VertexShader.Set(_vertexShader);
                 _context.VertexShader.SetConstantBuffer(0, _constantBuffer);
                 _context.PixelShader.Set(_pixelShader);
                 _context.PixelShader.SetShaderResource(0, _diffuseView);
                 _context.PixelShader.SetSampler(0, _samplerState);
 
-                // Update constants (Orbital camera projection)
+                // Update constants
                 if (_renderTarget == null) return;
                 float aspect = (float)_renderTarget.Description.Width / _renderTarget.Description.Height;
 
@@ -305,15 +383,15 @@ namespace ToolKitV.Rendering
                 float cp = (float)Math.Cos(CameraPitch);
                 float sp = (float)Math.Sin(CameraPitch);
 
-                Vector3 camPos = new Vector3(
+                Vector3 camPos = _modelCenter + new Vector3(
                     CameraDistance * sy * cp,
                     CameraDistance * sp,
                     CameraDistance * cy * cp
                 );
-
-                var view = Matrix.LookAtLH(camPos, Vector3.Zero, Vector3.Up);
-                var proj = Matrix.PerspectiveFovLH((float)Math.PI / 4.0f, aspect, 0.1f, 1000.0f);
-                
+ 
+                var view = Matrix.LookAtLH(camPos, _modelCenter, Vector3.Up);
+                var proj = Matrix.PerspectiveFovLH((float)Math.PI / 4.0f, aspect, 0.01f, 10000.0f);
+                 
                 var constants = new Constants
                 {
                     World = Matrix.Identity,
@@ -323,12 +401,17 @@ namespace ToolKitV.Rendering
                 };
                 _context.UpdateSubresource(ref constants, _constantBuffer);
 
-                // Set viewport
+                // Set state
+                _context.Rasterizer.State = _rasterizerState;
                 _context.Rasterizer.SetViewport(new Viewport(0, 0, _renderTarget.Description.Width, _renderTarget.Description.Height));
-                _context.OutputMerger.SetTargets(_renderTargetView);
+                _context.OutputMerger.SetTargets(_depthTargetView, _renderTargetView);
 
-                // Draw
-                _context.DrawIndexed(_modelIndexCount, 0, 0);
+                foreach (var g in _geometries)
+                {
+                    _context.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(g.VertexBuffer, g.VertexStride, 0));
+                    _context.InputAssembler.SetIndexBuffer(g.IndexBuffer, Format.R16_UInt, 0);
+                    _context.DrawIndexed(g.IndexCount, 0, 0);
+                }
             }
 
             // Force flush so D3D9 can see it
@@ -340,21 +423,26 @@ namespace ToolKitV.Rendering
 
         public void Dispose()
         {
-            _imageSource?.Dispose();
-            _renderTargetView?.Dispose();
-            _renderTarget?.Dispose();
-            
-            _modelVertexBuffer?.Dispose();
-            _modelIndexBuffer?.Dispose();
-            _diffuseView?.Dispose();
+            _imageSource.Dispose();
+            foreach (var g in _geometries)
+            {
+                g.VertexBuffer.Dispose();
+                g.IndexBuffer.Dispose();
+            }
+            _geometries.Clear();
             _constantBuffer?.Dispose();
-            _samplerState?.Dispose();
-            _inputLayout?.Dispose();
             _vertexShader?.Dispose();
             _pixelShader?.Dispose();
-
-            _context?.Dispose();
+            _inputLayout?.Dispose();
+            _samplerState?.Dispose();
+            _rasterizerState?.Dispose();
+            _diffuseView?.Dispose();
+            _renderTargetView?.Dispose();
+            _renderTarget?.Dispose();
+            _depthTargetView?.Dispose();
+            _depthTarget?.Dispose();
             _device?.Dispose();
+            _context?.Dispose();
         }
     }
 }

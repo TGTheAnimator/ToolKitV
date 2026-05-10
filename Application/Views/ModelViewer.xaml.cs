@@ -54,8 +54,8 @@ namespace ToolKitV.Views
         {
             var openFileDialog = new OpenFileDialog
             {
-                Filter = "GTA V Drawables (*.ydr)|*.ydr|All files (*.*)|*.*",
-                Title = "Select a YDR Model"
+                Filter = "GTA V Models (*.ydr, *.yft)|*.ydr;*.yft|All files (*.*)|*.*",
+                Title = "Select a YDR or YFT Model"
             };
 
             if (openFileDialog.ShowDialog() == true)
@@ -63,12 +63,17 @@ namespace ToolKitV.Views
                 try
                 {
                     byte[] data = File.ReadAllBytes(openFileDialog.FileName);
-                    var ydr = new YdrFile();
-                    ydr.Load(data);
-
-                    if (ydr.Drawable != null)
+                    if (openFileDialog.FileName.EndsWith(".ydr", System.StringComparison.OrdinalIgnoreCase))
                     {
-                        Viewport3D.LoadDrawable(ydr.Drawable);
+                        var ydr = new YdrFile();
+                        ydr.Load(data);
+                        if (ydr.Drawable != null) Viewport3D.LoadDrawable(ydr.Drawable);
+                    }
+                    else if (openFileDialog.FileName.EndsWith(".yft", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        var yft = new YftFile();
+                        yft.Load(data);
+                        if (yft.Fragment?.Drawable != null) Viewport3D.LoadDrawable(yft.Fragment.Drawable);
                     }
                     else
                     {

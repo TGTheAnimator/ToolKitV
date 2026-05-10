@@ -156,7 +156,7 @@ namespace ToolKitV.Views
             else _fpsStopwatch.Stop();
         }
 
-        public void LoadDrawable(CodeWalker.GameFiles.Drawable drawable)
+        public void LoadDrawable(CodeWalker.GameFiles.DrawableBase drawable)
         {
             _renderer?.LoadDrawable(drawable);
         }

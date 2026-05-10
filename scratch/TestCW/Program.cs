@@ -5,10 +5,9 @@ class Program
 {
     static void Main()
     {
-        Console.WriteLine("--- RpfBinaryFileEntry Constructors ---");
-        foreach(var c in typeof(RpfBinaryFileEntry).GetConstructors())
+        foreach(var name in Enum.GetNames(typeof(VertexSemantics)))
         {
-            Console.WriteLine($"Constructor({string.Join(", ", c.GetParameters().Select(p => p.ParameterType.Name + " " + p.Name))})");
+             Console.WriteLine($"{(int)Enum.Parse(typeof(VertexSemantics), name)} : {name}");
         }
     }
 }

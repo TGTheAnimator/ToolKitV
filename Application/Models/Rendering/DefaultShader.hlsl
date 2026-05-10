@@ -40,19 +40,15 @@ PS_IN VS(VS_IN input)
 float4 PS(PS_IN input) : SV_Target
 {
     // Basic directional lighting
-    float3 n = normalize(input.norm);
-    float3 l = normalize(LightDir);
+    float3 normal = normalize(input.norm);
+    float light = saturate(dot(normal, -normalize(LightDir))) * 0.8 + 0.2;
     
-    float diff = max(dot(n, l), 0.2f); // 0.2 ambient
-    
-    float3 color = float3(0.6f, 0.6f, 0.6f);
+    float4 color = float4(0.7, 0.7, 0.7, 1.0); // Default grey
     
     if (HasTexture)
     {
-        color = DiffuseTexture.Sample(LinearSampler, input.tex).rgb;
+        color = DiffuseTexture.Sample(LinearSampler, input.tex);
     }
     
-    color *= diff;
-    
-    return float4(color, 1.0f);
+    return float4(color.rgb * light, color.a);
 }
