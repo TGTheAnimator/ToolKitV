@@ -1,31 +1,29 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
-using WinForms = System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace ToolKitV.Views
 {
     public partial class SelectFolder : UserControl, INotifyPropertyChanged
     {
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         private void NotifyPropertyChanged([CallerMemberName] string propertyName = "")
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
         public string Title { get; set; } = "";
 
-        public string PathValue { get; set; } = "";
+        private string _path = "";
         public string Path
         {
-            get => PathValue;
+            get => _path;
             set
             {
-                if (value != PathValue)
+                if (value != _path)
                 {
-                    PathValue = value;
+                    _path = value;
                     NotifyPropertyChanged();
                 }
             }
@@ -34,16 +32,21 @@ namespace ToolKitV.Views
         public SelectFolder()
         {
             InitializeComponent();
-
             DataContext = this;
         }
 
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            WinForms.FolderBrowserDialog FBD = new WinForms.FolderBrowserDialog();
-            if (FBD.ShowDialog() == WinForms.DialogResult.OK)
+            // OpenFolderDialog is available in .NET 8 WPF without WinForms.
+            OpenFolderDialog dialog = new()
             {
-                Path = FBD.SelectedPath;
+                Title       = "Select folder",
+                Multiselect = false,
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                Path = dialog.FolderName;
             }
         }
     }

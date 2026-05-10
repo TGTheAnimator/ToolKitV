@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="ToolKitV.Views.TextureOptimization"
+<UserControl x:Class="ToolKitV.Views.TextureOptimization"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -27,24 +27,24 @@
                     <local:ToogleButton
                         x:Name="OnlyOverSized"
                         Title="Only oversized texture dictionaries"
-                        Description="In this case, only ytds that exceed 16 MB will be optimized."
+                        Description="Only process YTDs whose virtual (GPU) size exceeds 16 MB&#10;— the FiveM streaming budget threshold."
                         PropertyChanged="OnOnlyOverSizedTexturesChanged"/>
                 </StackPanel>
 
                 <StackPanel Margin="0 0 0 0">
                     <local:InputNumber
                         x:Name="OptimizeSize"
-                        Title="Optimize Size"
-                        Description="Width + Height in px = Optimize size. If nothing is optimized,&#10;try to set less values(4096, 2048, 1024, 512)"
-                        NumberValue="8192"
+                        Title="Optimize Size (Width + Height px)"
+                        Description="Textures whose Width+Height meets this threshold are reprocessed.&#10;Recommended for FiveM: 4096 (2048×2048). Lower = more textures optimized."
+                        NumberValue="4096"
                         PropertyChanged="OptimizeSize_PropertyChanged"/>
                 </StackPanel>
 
                 <StackPanel Margin="0 10 0 0">
                     <local:ToogleButton
                         x:Name="Downsize"
-                        Title="Downsize"
-                        Description="If enabled, the size of textures will be reduced by 2 times."
+                        Title="Downsize (÷2)"
+                        Description="Halves texture dimensions. Recommended for props/vehicles.&#10;Avoid on UI/script textures (handled automatically)."
                         PropertyChanged="Downsize_PropertyChanged"
                         IsToogled="True"/>
                 </StackPanel>
@@ -52,8 +52,8 @@
                 <StackPanel Margin="0 10 0 0">
                     <local:ToogleButton
                         x:Name="FormatOptimize"
-                        Title="Format optimization"
-                        Description="Change DDS format to smallest, may affect the display quality of colors."
+                        Title="Format Optimization (BC7/BC1/BC4)"
+                        Description="Re-encodes textures to the best compressed format for their channel count.&#10;BC7 for RGBA, BC1 for RGB, BC4 for grayscale. Minimal quality loss."
                         PropertyChanged="FormatOptimize_PropertyChanged"/>
                 </StackPanel>
 
