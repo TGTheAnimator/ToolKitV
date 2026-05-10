@@ -37,6 +37,11 @@
 - 🎩 **Smart Component Splitting** — Automatically separates base clothing from props (hats, glasses) and pairs textures directly to their models.
 - 📦 **One-Click Export** — Generates a fully compliant `fxmanifest.lua` and organizes files into a ready-to-stream folder.
 
+### 🎵 Audio Tools (NEW)
+- 🎧 **AWC Native Optimizer** — Mathematically cut massive 32MB+ audio soundbanks perfectly in half without breaking FiveM stream compatibility.
+- 🎛️ **DSP Resampling** — Uses high-quality Media Foundation Resamplers to step bloated 48kHz / 96kHz engine sounds down to 24kHz.
+- 🛠️ **Seamless Container Rebuilding** — Extracts the streams, resamples the PCM data, and injects it back directly into the `AwcFile` structure with intact chunk pointers and Jenkins hashes. 
+
 ### 📊 Asset Analyzer
 
 ### ⚠️ Crash Fixes
@@ -66,7 +71,7 @@
 
 ### Installation
 
-1. Download the latest **`TGToolKit-v2.0.0.zip`** from the [Releases](../../releases) page.
+1. Download the latest **`TGToolKit-v2.1.0.zip`** from the [Releases](../../releases) page.
 2. Extract the zip to any folder.
 3. Run **`TGToolKit.exe`**.
 
@@ -93,7 +98,10 @@
 ### Clothing Tools
 1. **Drop Folder** — Drop your loose `.ydd` and `.ytd` clothing mods into the app.
 2. **Configure Settings** — Enter your target ped and pack name.
-3. **Generate Add-on Pack** — Click to create the metadata and stream files instantly.
+### Audio Tools
+1. **Drop Folder** — Drop your massive vehicle `.awc` soundbank folder into the app.
+2. **Settings** — Toggle "Downsample to 24000Hz" to ensure no perceived quality loss while halving VRAM.
+3. **Optimize** — Watch your 30MB audio banks shrink to 15MB instantly without throwing structural errors!
 
 ---
 
@@ -111,7 +119,7 @@
 - [x] Dedicated Script RT crash fixer
 - [x] Clothes tools (Replace → Add-on conversion)
 - [x] Universal Drag-and-drop support
-- [ ] Audio (AWC) CLI Wrapper / Optimization Tools
+- [x] Audio (AWC) Native Optimization Tools
 - [ ] Per-file XML export/import for advanced users
 
 ---
@@ -120,8 +128,9 @@
 
 | Library | Author | Purpose |
 |---------|--------|---------|
-| [CodeWalker.Core](https://github.com/dexyfex/CodeWalker) | dexyfex | Reading and writing GTA V `.ytd` / `.rpf` files |
+| [CodeWalker.Core](https://github.com/dexyfex/CodeWalker) | dexyfex | Reading and writing GTA V `.ytd` / `.rpf` / `.awc` files |
 | [texconv.exe](https://github.com/microsoft/DirectXTex) | Microsoft | DDS texture format conversion |
+| [NAudio](https://github.com/naudio/NAudio) | Mark Heath | Native C# Audio DSP and Resampling |
 
 ---
 
