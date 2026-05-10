@@ -10,6 +10,11 @@
              SizeChanged="UserControl_SizeChanged">
     <Grid Background="#0A0A0C">
         <Image x:Name="ViewportImage" Stretch="Fill" />
+
+        <!-- FPS Counter overlay -->
+        <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10" Padding="5,2" Background="#80000000" CornerRadius="4">
+            <TextBlock x:Name="FpsText" Text="60 FPS" Foreground="White" FontSize="10" FontFamily="{StaticResource TT Norms Regular}"/>
+        </Border>
         
         <!-- Placeholder overlay when inactive or loading -->
         <Border x:Name="OverlayBorder" Background="#B0000000" Visibility="Collapsed">

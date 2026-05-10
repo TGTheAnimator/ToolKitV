@@ -1,18 +1,19 @@
 using System;
+using System.Windows;
 using System.Windows.Interop;
 using SharpDX.Direct3D9;
 using SharpDX.Direct3D11;
-using System.Windows;
-using Texture = SharpDX.Direct3D11.Texture2D;
+using Texture2D = SharpDX.Direct3D11.Texture2D;
 
 namespace ToolKitV.Rendering
 {
     public class DX11ImageSource : IDisposable
     {
         private D3DImage _d3dImage;
-        private Direct3DEx _d3dContext;
-        private DeviceEx _d3dDevice;
-        private Texture _renderTarget;
+        private SharpDX.Direct3D9.DeviceEx _d3dDevice = null!;
+        private SharpDX.Direct3D9.Direct3DEx _d3dContext = null!;
+        private Texture2D? _renderTarget;
+        private SharpDX.Direct3D9.Texture? _surface;
 
         public D3DImage ImageSource => _d3dImage;
 
@@ -39,20 +40,23 @@ namespace ToolKitV.Rendering
                 presentparams);
         }
 
-        public void SetRenderTarget(Texture renderTarget)
+        public void SetRenderTarget(Texture2D? renderTarget)
         {
             if (_renderTarget == renderTarget)
                 return;
 
-            _renderTarget = renderTarget;
+            _d3dImage.Lock();
+            _d3dImage.SetBackBuffer(D3DResourceType.IDirect3DSurface9, IntPtr.Zero);
+            _d3dImage.Unlock();
 
-            if (_renderTarget == null)
-            {
-                _d3dImage.Lock();
-                _d3dImage.SetBackBuffer(D3DResourceType.IDirect3DSurface9, IntPtr.Zero);
-                _d3dImage.Unlock();
+            _surface?.Dispose();
+            _surface = null;
+            _renderTarget = null;
+
+            if (renderTarget == null)
                 return;
-            }
+
+            _renderTarget = renderTarget;
 
             using (var resource = _renderTarget.QueryInterface<SharpDX.DXGI.Resource>())
             {
@@ -60,8 +64,9 @@ namespace ToolKitV.Rendering
                 if (handle == IntPtr.Zero)
                     throw new ArgumentException("Texture must be created with ResourceOptionFlags.Shared");
 
-                using (var texture = new SharpDX.Direct3D9.Texture(_d3dDevice, _renderTarget.Description.Width, _renderTarget.Description.Height, 1, Usage.RenderTarget, Format.A8R8G8B8, Pool.Default, ref handle))
-                using (var surface = texture.GetSurfaceLevel(0))
+                _surface = new SharpDX.Direct3D9.Texture(_d3dDevice, _renderTarget.Description.Width, _renderTarget.Description.Height, 1, Usage.RenderTarget, Format.A8R8G8B8, Pool.Default, ref handle);
+                
+                using (var surface = _surface.GetSurfaceLevel(0))
                 {
                     _d3dImage.Lock();
                     _d3dImage.SetBackBuffer(D3DResourceType.IDirect3DSurface9, surface.NativePointer);

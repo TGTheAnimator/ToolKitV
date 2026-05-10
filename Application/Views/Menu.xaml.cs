@@ -94,11 +94,11 @@ namespace ToolKitV.Views
             NavigateTo?.Invoke("ClothingTools");
         }
 
-        private void AudioTools_Click(object sender, MouseButtonEventArgs e)
+        private void AudioViewer_Click(object sender, MouseButtonEventArgs e)
         {
-            if (_activeView == "AudioTools") return;
-            SetActiveItem("AudioTools");
-            NavigateTo?.Invoke("AudioTools");
+            if (_activeView == "AudioViewer") return;
+            SetActiveItem("AudioViewer");
+            NavigateTo?.Invoke("AudioViewer");
         }
 
         // ── Visual state ──────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ namespace ToolKitV.Views
             bool assetActive    = view == "AssetAnalyzer";
             bool modelActive    = view == "ModelViewer";
             bool clothingActive = view == "ClothingTools";
-            bool audioActive    = view == "AudioTools";
+            bool audioActive    = view == "AudioViewer";
 
             // Texture Optimizer item
             TextureOptimizerBg.Visibility         = texActive ? Visibility.Visible   : Visibility.Collapsed;
@@ -159,12 +159,12 @@ namespace ToolKitV.Views
                 ? new SolidColorBrush(Colors.White)
                 : new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
 
-            // Audio Tools item
-            AudioToolsBg.Visibility         = audioActive ? Visibility.Visible   : Visibility.Collapsed;
-            AudioToolsInactiveBg.Visibility = audioActive ? Visibility.Collapsed : Visibility.Visible;
-            AudioToolsStripe.Visibility     = audioActive ? Visibility.Visible   : Visibility.Collapsed;
-            AudioToolsLabel.FontWeight      = audioActive ? FontWeights.Bold     : FontWeights.Normal;
-            AudioToolsLabel.Foreground      = audioActive
+            // Audio Viewer item
+            AudioViewerActiveBg.Visibility         = audioActive ? Visibility.Visible   : Visibility.Collapsed;
+            AudioViewerInactiveBg.Visibility = audioActive ? Visibility.Collapsed : Visibility.Visible;
+            AudioViewerStripe.Visibility     = audioActive ? Visibility.Visible   : Visibility.Collapsed;
+            AudioViewerLabel.FontWeight      = audioActive ? FontWeights.Bold     : FontWeights.Normal;
+            AudioViewerLabel.Foreground      = audioActive
                 ? new SolidColorBrush(Colors.White)
                 : new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
         }

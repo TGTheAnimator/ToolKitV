@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="CodeWalker.Core" Version="1.0.3" />
+    <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
   </ItemGroup>
 
 </Project>

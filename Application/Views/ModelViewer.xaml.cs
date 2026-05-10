@@ -1,5 +1,9 @@
 using System.ComponentModel;
+using System.IO;
+using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
+using CodeWalker.GameFiles;
 
 namespace ToolKitV.Views
 {
@@ -9,6 +13,73 @@ namespace ToolKitV.Views
         {
             InitializeComponent();
             ToggleViewportBtn.IsToogled = true; // Default to ON for the prototype demo
+            LoadModelBtn.Click += LoadModelBtn_Click;
+            LoadTextureBtn.Click += LoadTextureBtn_Click;
+        }
+
+        private void LoadTextureBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Filter = "GTA V Texture Dictionary (*.ytd)|*.ytd|All files (*.*)|*.*",
+                Title = "Select a YTD Texture Dictionary"
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    byte[] data = File.ReadAllBytes(openFileDialog.FileName);
+                    var ytd = new YtdFile();
+                    ytd.Load(data);
+
+                    if (ytd.TextureDict?.Textures?.data_items != null && ytd.TextureDict.Textures.data_items.Length > 0)
+                    {
+                        // For the prototype, we apply the first texture found in the dictionary
+                        Viewport3D.LoadTexture(ytd.TextureDict.Textures.data_items[0]);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Could not find any textures in this YTD.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    MessageBox.Show($"Failed to load YTD: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void LoadModelBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Filter = "GTA V Drawables (*.ydr)|*.ydr|All files (*.*)|*.*",
+                Title = "Select a YDR Model"
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    byte[] data = File.ReadAllBytes(openFileDialog.FileName);
+                    var ydr = new YdrFile();
+                    ydr.Load(data);
+
+                    if (ydr.Drawable != null)
+                    {
+                        Viewport3D.LoadDrawable(ydr.Drawable);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Could not find a valid Drawable in this YDR.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    MessageBox.Show($"Failed to load YDR: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
         }
 
         private void ToggleViewportBtn_PropertyChanged(object sender, PropertyChangedEventArgs e)

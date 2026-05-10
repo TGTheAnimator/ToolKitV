@@ -15,7 +15,7 @@ namespace ToolKitV.Models
         private const string RepoName = "ToolKitV";
         private const string ApiUrl = $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";
 
-        public static string CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.1.0";
+        public static string CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "3.0.0";
 
         public class ReleaseInfo
         {
