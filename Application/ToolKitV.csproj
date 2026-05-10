@@ -41,7 +41,7 @@
     <Content Include="Assets\Images\logo.ico" />
   </ItemGroup>
   <ItemGroup>
-    <SplashScreen Include="Assets\Images\bg.bmp" />
+    <Resource Include="Assets\Images\bg.bmp" />
   </ItemGroup>
   <ItemGroup>
     <None Update="Dependencies\texconv.exe">

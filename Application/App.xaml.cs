@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Threading;
 using System.Windows.Threading;
+using System.Threading.Tasks;
+using ToolKitV.Views;
 
 namespace ToolKitV
 {
@@ -9,7 +11,7 @@ namespace ToolKitV
         protected Mutex? Mutex;
         private bool _ownsMutex;
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             // Single-instance guard — prevent running TGToolKit more than once at a time.
             Mutex = new Mutex(true, "TGToolKit_SingleInstance", out _ownsMutex);
@@ -25,12 +27,21 @@ namespace ToolKitV
                 return;
             }
 
-            ShutdownMode = ShutdownMode.OnLastWindowClose;
+            // Show manual splash screen for better scaling/stretching control
+            var splash = new SplashWindow();
+            splash.Show();
+
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
             
             // Artificial delay to show splash screen
-            Thread.Sleep(2000);
+            await Task.Delay(2000); 
             
-            base.OnStartup(e);
+            var mainWindow = new MainWindow();
+            MainWindow = mainWindow;
+            mainWindow.Show();
+            splash.Close();
+
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
         }
 
         protected override void OnExit(ExitEventArgs e)
