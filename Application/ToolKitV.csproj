@@ -21,6 +21,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CodeWalker.Core" Version="1.0.3" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\Images\clothesIcon.png" />

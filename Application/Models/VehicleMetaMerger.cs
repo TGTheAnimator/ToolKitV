@@ -420,14 +420,12 @@ namespace ToolKitV.Models
 
                 // Find the remappings that apply to carcols.meta in the same folder
                 Dictionary<int, int>? kitRemap = kitIdRemapping
-                    .Where(kvp => Path.GetDirectoryName(kvp.Key)
-                        .Equals(fileDir, StringComparison.OrdinalIgnoreCase))
+                    .Where(kvp => string.Equals(Path.GetDirectoryName(kvp.Key) ?? "", fileDir ?? "", StringComparison.OrdinalIgnoreCase))
                     .Select(kvp => kvp.Value)
                     .FirstOrDefault();
 
                 Dictionary<int, int>? sirenRemap = sirenIdRemapping
-                    .Where(kvp => Path.GetDirectoryName(kvp.Key)
-                        .Equals(fileDir, StringComparison.OrdinalIgnoreCase))
+                    .Where(kvp => string.Equals(Path.GetDirectoryName(kvp.Key) ?? "", fileDir ?? "", StringComparison.OrdinalIgnoreCase))
                     .Select(kvp => kvp.Value)
                     .FirstOrDefault();
 

@@ -208,7 +208,7 @@ namespace ToolKitV.Views
             ScanModelsButton.Title = "Scanning Models...";
             ResetModelScanDisplay();
 
-            ModelScanner.ScanResults results = null;
+            ModelScanner.ScanResults? results = null;
 
             await Task.Run(() =>
             {
