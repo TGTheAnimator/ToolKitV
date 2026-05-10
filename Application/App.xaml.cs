@@ -26,6 +26,10 @@ namespace ToolKitV
             }
 
             ShutdownMode = ShutdownMode.OnLastWindowClose;
+            
+            // Artificial delay to show splash screen
+            Thread.Sleep(2000);
+            
             base.OnStartup(e);
         }
 

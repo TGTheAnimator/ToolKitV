@@ -51,6 +51,8 @@ namespace ToolKitV.Models
             }
             catch (Exception ex)
             {
+                // Silently log to file for debugging if needed
+                try { File.AppendAllText("log.txt", $"\n[{DateTime.Now}] Update check failed: {ex.Message}"); } catch { }
                 Debug.WriteLine($"Update check failed: {ex.Message}");
             }
 
