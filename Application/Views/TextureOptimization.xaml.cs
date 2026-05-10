@@ -46,7 +46,7 @@ namespace ToolKitV.Views
         {
             Dispatcher.Invoke(() =>
             {
-                AnalyzeButton.Progress.Width = Math.Ceiling(210.0 / 100 * progress);
+                AnalyzeButton.SetProgress(progress);
             });
         }
 
@@ -57,7 +57,7 @@ namespace ToolKitV.Views
         {
             Dispatcher.Invoke(() =>
             {
-                OptimizeButton.Progress.Width = Math.Ceiling(210.0 / 100 * progress);
+                OptimizeButton.SetProgress(progress);
 
                 if (data.filesOptimized > 0)
                 {
@@ -78,8 +78,9 @@ namespace ToolKitV.Views
         {
             MainPath = MainFolder.Path;
             bool ok = CheckCanProceed();
-            OptimizeButton.IsButtonEnabled = ok;
-            AnalyzeButton.IsButtonEnabled  = ok;
+            OptimizeButton.IsButtonEnabled   = ok;
+            AnalyzeButton.IsButtonEnabled    = ok;
+            FixScriptRtButton.IsButtonEnabled = ok;
         }
 
         private void OnBackupPathChanged(object sender, PropertyChangedEventArgs e)
@@ -109,7 +110,7 @@ namespace ToolKitV.Views
 
             SetButtonsEnabled(true);
             AnalyzeButton.Title = "Analyze";
-            AnalyzeButton.Progress.Width = 0;
+            AnalyzeButton.ResetProgress();
         }
 
         private async void OptimizeButton_Click(object sender, RoutedEventArgs e)
@@ -151,13 +152,36 @@ namespace ToolKitV.Views
 
             SetButtonsEnabled(true);
             OptimizeButton.Title = "Optimize";
-            OptimizeButton.Progress.Width = 0;
+            OptimizeButton.ResetProgress();
         }
 
         private void SetButtonsEnabled(bool enabled)
         {
-            OptimizeButton.IsButtonEnabled = enabled && CheckCanProceed();
-            AnalyzeButton.IsButtonEnabled  = enabled && CheckCanProceed();
+            bool ok = enabled && CheckCanProceed();
+            OptimizeButton.IsButtonEnabled    = ok;
+            AnalyzeButton.IsButtonEnabled     = ok;
+            FixScriptRtButton.IsButtonEnabled = ok;
+        }
+
+        private async void FixScriptRtButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetButtonsEnabled(false);
+            FixScriptRtButton.Title = "Scanning...";
+            ScriptRtResultBorder.Visibility = System.Windows.Visibility.Collapsed;
+
+            ScriptRtResultsData result = await Task.Run(() =>
+                FixScriptRTs(MainPath, BackupPath, null!));
+
+            Dispatcher.Invoke(() =>
+            {
+                ScriptRtScanned.Text  = result.ytdsScanned.ToString();
+                ScriptRtFixed.Text    = result.ytdsFixed.ToString();
+                ScriptRtTextures.Text = result.texturesFixed.ToString();
+                ScriptRtResultBorder.Visibility = System.Windows.Visibility.Visible;
+            });
+
+            SetButtonsEnabled(true);
+            FixScriptRtButton.Title = "Fix Script RT Crashes";
         }
     }
 }

@@ -105,4 +105,4 @@ dotnet build Application/ToolKitV.csproj --configuration Release
 
 This project is licensed under the **GPL-3.0 License** — see [LICENSE](LICENSE) for details.
 
-Original work by [Umbrella.re](https://umbrella.re) (2021–2022). Fork maintained by **TGTheAnimator** (2025).
+Original work by [Umbrella.re](https://umbrella.re) (2021–2022). Fork maintained by **TGTheAnimator** (2026).
