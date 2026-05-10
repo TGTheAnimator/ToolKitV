@@ -290,15 +290,24 @@ namespace ToolkitV.Models
              (((flag >> 4)  & 0x1)  << 4)) * (0x2000 << (flag & 0xF));
 
         /// <summary>
-        /// Reads the RSC7 header of a .ytd file and returns [virtualSizeMB, physicalSizeMB].
-        /// Virtual size = GPU (VRAM) usage — the number FiveM cares about for the streaming budget.
-        /// Physical size = on-disk compressed size.
-        /// Returns [0, 0] for files without an RSC7 header (not a valid GTA V resource).
+        /// Returns [virtualSizeMB, diskSizeMB] for a .ytd file.
+        ///
+        /// virtualMB  — decoded from the RSC7 header (VRAM usage).
+        ///              This is what FiveM uses for the streaming budget check.
+        ///              Return value 0 means the file has no RSC7 header (skip it).
+        ///
+        /// diskMB     — actual compressed bytes on disk (FileInfo.Length).
+        ///              This matches what Windows Explorer shows and is what
+        ///              users see in folder Properties.
         /// </summary>
-        private static (float virtualMB, float physicalMB) GetFileSize(string filePath, LogWriter? logWriter)
+        private static (float virtualMB, float diskMB) GetFileSize(string filePath, LogWriter? logWriter)
         {
             try
             {
+                // Actual compressed file size — what the OS reports.
+                float diskMB = new FileInfo(filePath).Length / 1024f / 1024f;
+
+                // RSC7 virtual flag — VRAM budget used by FiveM.
                 using FileStream   fs     = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 using BinaryReader reader = new(fs);
 
@@ -306,18 +315,16 @@ namespace ToolkitV.Models
                 string magStr = System.Text.Encoding.ASCII.GetString(magic);
 
                 if (magStr != "RSC7")
-                    return (0f, 0f);
+                    return (0f, diskMB);  // not a GTA V resource — skip for budget, but still count disk size
 
                 reader.ReadBytes(4); // version
 
-                int virtualFlag  = reader.ReadInt32();
-                int physicalFlag = reader.ReadInt32();
+                int virtualFlag = reader.ReadInt32();
+                // physicalFlag skipped — we use actual disk size instead
+                float vMB = FlagToSize(virtualFlag) / 1024f / 1024f;
 
-                float vMB = FlagToSize(virtualFlag)  / 1024f / 1024f;
-                float pMB = FlagToSize(physicalFlag) / 1024f / 1024f;
-
-                logWriter?.LogWrite($"[RSC7] {filePath} | virtual={vMB:F2} MB, physical={pMB:F2} MB");
-                return (vMB, pMB);
+                logWriter?.LogWrite($"[RSC7] {filePath} | virtual={vMB:F2} MB, disk={diskMB:F2} MB");
+                return (vMB, diskMB);
             }
             catch (Exception ex)
             {
@@ -400,18 +407,19 @@ namespace ToolkitV.Models
 
                 log.LogWrite($"Processing: {filePath}");
 
-                (float virtualMB, float physicalMB) = GetFileSize(filePath, log);
+                (float virtualMB, float diskMB) = GetFileSize(filePath, log);
 
-                bool isZero = virtualMB == 0f && physicalMB == 0f;
+                // virtualMB == 0 means no RSC7 header — not a valid GTA V resource, skip entirely.
+                bool noRsc7 = virtualMB == 0f;
 
                 // FIX: use virtualMB for the FiveM streaming budget check (was physicalMB).
-                if (onlyOverSized && (isZero || virtualMB < 16f))
+                if (onlyOverSized && (noRsc7 || virtualMB < 16f))
                 {
                     log.LogWrite($"  Skipped (not oversized): virtual={virtualMB:F2} MB");
                     continue;
                 }
 
-                if (isZero)
+                if (noRsc7)
                 {
                     log.LogWrite($"  Skipped (no RSC7 header / invalid file)");
                     continue;
@@ -468,10 +476,10 @@ namespace ToolkitV.Models
                     byte[] newData   = ytdFile.Save();
                     File.WriteAllBytes(filePath, newData);
 
-                    (float newVirtMB, float newPhysMB) = GetFileSize(filePath, log);
-                    results.optimizedSize += physicalMB - newPhysMB;
+                    (float newVirtMB, float newDiskMB) = GetFileSize(filePath, log);
+                    results.optimizedSize += diskMB - newDiskMB;
 
-                    log.LogWrite($"  Saved. Physical: {physicalMB:F2} MB → {newPhysMB:F2} MB (saved {physicalMB - newPhysMB:F2} MB)");
+                    log.LogWrite($"  Saved. Disk: {diskMB:F2} MB → {newDiskMB:F2} MB (saved {diskMB - newDiskMB:F2} MB)");
                 }
 
                 int progress = i * 100 / inputFiles.Length;
