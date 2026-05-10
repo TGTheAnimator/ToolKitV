@@ -31,7 +31,6 @@
     <Resource Include="Assets\Images\minus-outlined.png" />
   </ItemGroup>
   <ItemGroup>
-  <ItemGroup>
     <Resource Include="Assets\Images\textureIcon.png" />
     <Resource Include="Assets\Images\vehiclesIcon.png" />
   </ItemGroup>
