@@ -21,7 +21,8 @@ namespace ToolKitV.Models
     {
         public const int MaxVerticesLimit = 64000;
         public const int WarningVerticesLimit = 50000;
-        public const long MaxPhysicalSizeLimit = 16 * 1024 * 1024; // 16 MB
+        public const float MaxVirtualSizeLimitMB = 16.0f;
+        public const float WarningVirtualSizeLimitMB = 10.0f;
 
         public enum DangerLevel
         {
@@ -34,7 +35,8 @@ namespace ToolKitV.Models
         {
             public string FilePath { get; set; } = string.Empty;
             public string FileName { get; set; } = string.Empty;
-            public long PhysicalSize { get; set; }
+            public float DiskSizeMB { get; set; }
+            public float VirtualSizeMB { get; set; }
             public int TotalVertices { get; set; }
             public int TotalPolygons { get; set; }
             public int HighestLODVertices { get; set; }
@@ -124,13 +126,24 @@ namespace ToolKitV.Models
                 FileName = Path.GetFileName(filePath)
             };
 
-            var fileInfo = new FileInfo(filePath);
-            stats.PhysicalSize = fileInfo.Length;
+            var (vMB, diskMB) = Rsc7SizeHelper.GetFileSize(filePath);
+            stats.VirtualSizeMB = vMB;
+            stats.DiskSizeMB = diskMB;
 
-            if (stats.PhysicalSize > MaxPhysicalSizeLimit)
+            if (stats.VirtualSizeMB > MaxVirtualSizeLimitMB)
             {
-                stats.Issues.Add($"File size is {(stats.PhysicalSize / 1024.0 / 1024.0):F2} MB (Limit: 16 MB). High risk of streaming failure.");
+                stats.Issues.Add($"Virtual size is {stats.VirtualSizeMB:F2} MB (Limit: {MaxVirtualSizeLimitMB:F2} MB). High risk of streaming failure. Reduce polygon count or split into LOD-separated YFTs. Target <10 MB virtual.");
                 stats.Status = DangerLevel.Critical;
+            }
+            else if (stats.VirtualSizeMB > WarningVirtualSizeLimitMB)
+            {
+                stats.Issues.Add($"Virtual size is {stats.VirtualSizeMB:F2} MB. Very heavy, optimization recommended to prevent texture loss.");
+                stats.Status = DangerLevel.Warning;
+            }
+
+            if (stats.DiskSizeMB > stats.VirtualSizeMB && stats.VirtualSizeMB > 0f)
+            {
+                stats.Issues.Add("Diagnostic: Disk size is larger than virtual size. Possible corrupted RSC header or unusual compression.");
             }
 
             byte[] data = File.ReadAllBytes(filePath);
@@ -157,12 +170,12 @@ namespace ToolKitV.Models
             // Determine status based on vertices if size wasn't already critical
             if (stats.HighestLODVertices > MaxVerticesLimit)
             {
-                stats.Issues.Add($"Geometry has {stats.HighestLODVertices:N0} vertices. EXCEEDS 64K LIMIT! Guaranteed georgia-alaska-october crash.");
+                stats.Issues.Add($"Geometry has {stats.HighestLODVertices:N0} vertices. EXCEEDS 64K LIMIT! Guaranteed georgia-alaska-october crash. LOD baking required. Use a DCC tool to reduce High LOD below 50k vertices.");
                 stats.Status = DangerLevel.Critical;
             }
             else if (stats.HighestLODVertices > WarningVerticesLimit && stats.Status != DangerLevel.Critical)
             {
-                stats.Issues.Add($"Geometry has {stats.HighestLODVertices:N0} vertices. Very close to the 64k engine limit. May cause instability.");
+                stats.Issues.Add($"Geometry has {stats.HighestLODVertices:N0} vertices. Very close to the 64k engine limit. Consider reducing High LOD by 20–30% for performance headroom.");
                 stats.Status = DangerLevel.Warning;
             }
             else if (stats.TotalPolygons > 100000 && stats.Status != DangerLevel.Critical)
@@ -242,7 +255,7 @@ namespace ToolKitV.Models
                 {
                     sb.AppendLine($"[CRITICAL] {model.FileName}");
                     sb.AppendLine($"  Path:     {model.FilePath}");
-                    sb.AppendLine($"  Size:     {(model.PhysicalSize / 1024.0 / 1024.0):F2} MB");
+                    sb.AppendLine($"  Size:     {model.VirtualSizeMB:F2} MB Virtual | {model.DiskSizeMB:F2} MB Disk");
                     sb.AppendLine($"  High LOD: {model.HighestLODVertices:N0} Vertices | {model.HighestLODPolygons:N0} Polygons");
                     foreach (var issue in model.Issues)
                         sb.AppendLine($"  -> {issue}");
@@ -259,7 +272,7 @@ namespace ToolKitV.Models
                 {
                     sb.AppendLine($"[WARNING] {model.FileName}");
                     sb.AppendLine($"  Path:     {model.FilePath}");
-                    sb.AppendLine($"  Size:     {(model.PhysicalSize / 1024.0 / 1024.0):F2} MB");
+                    sb.AppendLine($"  Size:     {model.VirtualSizeMB:F2} MB Virtual | {model.DiskSizeMB:F2} MB Disk");
                     sb.AppendLine($"  High LOD: {model.HighestLODVertices:N0} Vertices | {model.HighestLODPolygons:N0} Polygons");
                     foreach (var issue in model.Issues)
                         sb.AppendLine($"  -> {issue}");

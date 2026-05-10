@@ -103,8 +103,8 @@ namespace ToolKitV.Views
                 MergeButton.SetProgress(progress);
                 ResultVehicles.Text   = data.VehiclesMerged   > 0 ? data.VehiclesMerged.ToString()   : "—";
                 ResultHandling.Text   = data.HandlingMerged   > 0 ? data.HandlingMerged.ToString()   : "—";
-                ResultKitsLights.Text = (data.KitsMerged + data.LightsMerged) > 0
-                    ? $"{data.KitsMerged} / {data.LightsMerged}" : "—";
+                ResultKitsLights.Text = (data.KitsMerged + data.LightsMerged + data.SirenSettingsMerged) > 0
+                    ? $"{data.KitsMerged} / {data.LightsMerged} / {data.SirenSettingsMerged}" : "—";
                 ResultVariations.Text   = data.VariationsMerged   > 0 ? data.VariationsMerged.ToString()   : "—";
                 ResultConflicts.Text    = data.ConflictsResolved > 0 ? data.ConflictsResolved.ToString() : "0";
                 ResultDupes.Text        = data.DuplicatesSkipped > 0 ? data.DuplicatesSkipped.ToString() : "0";
@@ -148,7 +148,7 @@ namespace ToolKitV.Views
 
                 ResultVehicles.Text     = result.VehiclesMerged.ToString();
                 ResultHandling.Text     = result.HandlingMerged.ToString();
-                ResultKitsLights.Text   = $"{result.KitsMerged} / {result.LightsMerged}";
+                ResultKitsLights.Text   = $"{result.KitsMerged} / {result.LightsMerged} / {result.SirenSettingsMerged}";
                 ResultVariations.Text   = result.VariationsMerged.ToString();
                 ResultConflicts.Text    = result.ConflictsResolved.ToString();
                 ResultDupes.Text        = result.DuplicatesSkipped.ToString();

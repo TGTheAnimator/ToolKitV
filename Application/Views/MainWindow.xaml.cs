@@ -9,6 +9,7 @@ namespace ToolKitV
         // Pre-instantiate views so state is preserved when switching tabs
         private readonly TextureOptimization _textureView  = new();
         private readonly VehicleTools        _vehicleView  = new();
+        private readonly AssetAnalyzer       _assetView    = new();
 
         public MainWindow()
         {
@@ -33,6 +34,11 @@ namespace ToolKitV
                 case "VehicleTools":
                     MainContent.Content  = _vehicleView;
                     AppSubtitle.Text     = "  Vehicle Meta Consolidation";
+                    break;
+
+                case "AssetAnalyzer":
+                    MainContent.Content  = _assetView;
+                    AppSubtitle.Text     = "  Resource Budget Analyzer";
                     break;
             }
         }

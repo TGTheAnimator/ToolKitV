@@ -38,6 +38,13 @@ namespace ToolKitV.Views
             NavigateTo?.Invoke("VehicleTools");
         }
 
+        private void AssetAnalyzer_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_activeView == "AssetAnalyzer") return;
+            SetActiveItem("AssetAnalyzer");
+            NavigateTo?.Invoke("AssetAnalyzer");
+        }
+
         // ── Visual state ──────────────────────────────────────────────────────
 
         private void SetActiveItem(string view)
@@ -46,6 +53,7 @@ namespace ToolKitV.Views
 
             bool texActive      = view == "TextureOptimizer";
             bool vehiclesActive = view == "VehicleTools";
+            bool assetActive    = view == "AssetAnalyzer";
 
             // Texture Optimizer item
             TextureOptimizerBg.Visibility         = texActive ? Visibility.Visible   : Visibility.Collapsed;
@@ -62,6 +70,15 @@ namespace ToolKitV.Views
             VehiclesStripe.Visibility     = vehiclesActive ? Visibility.Visible   : Visibility.Collapsed;
             VehiclesLabel.FontWeight      = vehiclesActive ? FontWeights.Bold     : FontWeights.Normal;
             VehiclesLabel.Foreground      = vehiclesActive
+                ? new SolidColorBrush(Colors.White)
+                : new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
+
+            // Asset Analyzer item
+            AssetAnalyzerBg.Visibility         = assetActive ? Visibility.Visible   : Visibility.Collapsed;
+            AssetAnalyzerInactiveBg.Visibility = assetActive ? Visibility.Collapsed : Visibility.Visible;
+            AssetAnalyzerStripe.Visibility     = assetActive ? Visibility.Visible   : Visibility.Collapsed;
+            AssetAnalyzerLabel.FontWeight      = assetActive ? FontWeights.Bold     : FontWeights.Normal;
+            AssetAnalyzerLabel.Foreground      = assetActive
                 ? new SolidColorBrush(Colors.White)
                 : new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
         }

@@ -121,7 +121,7 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="•" Foreground="#C0132A" FontFamily="Fonts/#TT Norms" FontSize="11"/>
                                 <TextBlock Grid.Column="1" Foreground="#C0FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="11"
-                                           Text="carcols.meta — Kits (modkit ID conflicts auto-remapped) + Lights"/>
+                                           Text="carcols.meta — Kits (modkit ID conflicts auto-remapped) + Lights + Sirens"/>
                             </Grid>
                             <Grid Margin="0 2">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -240,7 +240,7 @@
                     </Grid>
                     <Grid Margin="0 0 0 5">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Kits / Lights merged" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
+                        <TextBlock Grid.Column="0" Text="Kits / Lights / Sirens merged" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
                         <TextBlock x:Name="ResultKitsLights" Grid.Column="1" Text="—" Foreground="#E0FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12" FontWeight="Bold"/>
                     </Grid>
                     <Grid Margin="0 0 0 5">
@@ -250,7 +250,7 @@
                     </Grid>
                     <Grid Margin="0 0 0 5">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Modkit ID conflicts resolved" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
+                        <TextBlock Grid.Column="0" Text="Kit + Siren ID conflicts resolved" Foreground="#55FFFFFF" FontFamily="Fonts/#TT Norms" FontSize="12"/>
                         <TextBlock x:Name="ResultConflicts" Grid.Column="1" Text="—" Foreground="#FF5555" FontFamily="Fonts/#TT Norms" FontSize="12" FontWeight="Bold"/>
                     </Grid>
                     <Grid Margin="0 0 0 5">

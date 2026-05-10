@@ -284,11 +284,6 @@ namespace ToolkitV.Models
 
         // ─── RSC7 size helpers ───────────────────────────────────────────────────
 
-        private static float FlagToSize(int flag) =>
-            (((flag >> 17) & 0x7f) + (((flag >> 11) & 0x3f) << 1) +
-             (((flag >> 7)  & 0xf)  << 2) + (((flag >> 5)  & 0x3)  << 3) +
-             (((flag >> 4)  & 0x1)  << 4)) * (0x2000 << (flag & 0xF));
-
         /// <summary>
         /// Returns [virtualSizeMB, diskSizeMB] for a .ytd file.
         ///
@@ -302,35 +297,14 @@ namespace ToolkitV.Models
         /// </summary>
         private static (float virtualMB, float diskMB) GetFileSize(string filePath, LogWriter? logWriter)
         {
-            try
-            {
-                // Actual compressed file size — what the OS reports.
-                float diskMB = new FileInfo(filePath).Length / 1024f / 1024f;
-
-                // RSC7 virtual flag — VRAM budget used by FiveM.
-                using FileStream   fs     = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                using BinaryReader reader = new(fs);
-
-                byte[] magic = reader.ReadBytes(4);
-                string magStr = System.Text.Encoding.ASCII.GetString(magic);
-
-                if (magStr != "RSC7")
-                    return (0f, diskMB);  // not a GTA V resource — skip for budget, but still count disk size
-
-                reader.ReadBytes(4); // version
-
-                int virtualFlag = reader.ReadInt32();
-                // physicalFlag skipped — we use actual disk size instead
-                float vMB = FlagToSize(virtualFlag) / 1024f / 1024f;
-
+            var (vMB, diskMB) = Rsc7SizeHelper.GetFileSize(filePath);
+            
+            if (vMB > 0f)
                 logWriter?.LogWrite($"[RSC7] {filePath} | virtual={vMB:F2} MB, disk={diskMB:F2} MB");
-                return (vMB, diskMB);
-            }
-            catch (Exception ex)
-            {
-                logWriter?.LogWrite($"[ERROR] Could not read {filePath}: {ex.Message}");
-                return (0f, 0f);
-            }
+            else if (diskMB == 0f)
+                logWriter?.LogWrite($"[ERROR] Could not read {filePath}");
+                
+            return (vMB, diskMB);
         }
 
         // ─── YTD loading helpers ─────────────────────────────────────────────────
