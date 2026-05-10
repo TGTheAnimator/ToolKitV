@@ -10,6 +10,7 @@ namespace ToolKitV
         private readonly TextureOptimization _textureView  = new();
         private readonly VehicleTools        _vehicleView  = new();
         private readonly AssetAnalyzer       _assetView    = new();
+        private readonly ClothingTools       _clothingView = new();
 
         public MainWindow()
         {
@@ -39,6 +40,11 @@ namespace ToolKitV
                 case "AssetAnalyzer":
                     MainContent.Content  = _assetView;
                     AppSubtitle.Text     = "  Resource Budget Analyzer";
+                    break;
+
+                case "ClothingTools":
+                    MainContent.Content  = _clothingView;
+                    AppSubtitle.Text     = "  Add-on Clothing Generator";
                     break;
             }
         }

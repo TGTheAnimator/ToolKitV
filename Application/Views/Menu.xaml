@@ -151,23 +151,46 @@
                 </Grid>
             </Border>
 
-            <!-- Clothes — Coming Soon -->
-            <Border Height="46" CornerRadius="8" Margin="0 2" Opacity="0.35" Cursor="Arrow">
-                <Border.Background><SolidColorBrush Color="#10FFFFFF"/></Border.Background>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="17 0 0 0">
-                    <TextBlock Text="👕" FontSize="14" VerticalAlignment="Center" Margin="0 0 10 0"/>
-                    <StackPanel>
-                        <TextBlock Text="Clothes"
-                                   Foreground="#80FFFFFF"
+            <!-- Clothing Tools -->
+            <Border x:Name="ClothingToolsItem"
+                    Height="46" CornerRadius="8" Margin="0 2"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="ClothingTools_Click">
+                <Grid>
+                    <!-- Active gradient bg -->
+                    <Border x:Name="ClothingToolsBg" CornerRadius="8" Visibility="Collapsed">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#30C0132A" Offset="0"/>
+                                <GradientStop Color="#15C0132A" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <!-- Inactive bg -->
+                    <Border x:Name="ClothingToolsInactiveBg" CornerRadius="8" Background="#10FFFFFF"/>
+
+                    <!-- Left accent stripe (hidden when inactive) -->
+                    <Rectangle x:Name="ClothingToolsStripe"
+                               Width="3" HorizontalAlignment="Left" RadiusX="2" RadiusY="2"
+                               Visibility="Collapsed">
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#FF5555" Offset="0"/>
+                                <GradientStop Color="#C0132A" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="17 0 0 0">
+                        <TextBlock Text="👕" FontSize="14" VerticalAlignment="Center" Margin="0 0 10 0"/>
+                        <TextBlock x:Name="ClothingToolsLabel"
+                                   Text="Clothing Tools"
+                                   Foreground="#B0FFFFFF"
                                    FontFamily="Fonts/#TT Norms"
                                    FontSize="13"
                                    VerticalAlignment="Center"/>
-                        <TextBlock Text="Coming soon"
-                                   Foreground="#40FFFFFF"
-                                   FontFamily="Fonts/#TT Norms"
-                                   FontSize="9"/>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </Border>
         </StackPanel>
 
@@ -178,7 +201,7 @@
                        FontFamily="Fonts/#TT Norms"
                        FontSize="10"
                        FontWeight="Bold"/>
-            <TextBlock Text="v1.2.0"
+            <TextBlock Text="v2.0.0"
                        Foreground="#25FFFFFF"
                        FontFamily="Fonts/#TT Norms"
                        FontSize="9"/>
