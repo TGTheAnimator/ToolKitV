@@ -14,7 +14,7 @@
                     Foreground="#33FFFFFF"
                     Style="{StaticResource TT Norms Bold}"
                     FontSize="10"
-                    Text="TGTheAnimator, 2025"/>
+                    Text="TGTA, 2026"/>
 
                 <TextBlock 
                     HorizontalAlignment="Left"

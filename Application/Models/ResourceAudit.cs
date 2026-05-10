@@ -176,9 +176,9 @@ namespace ToolKitV.Models
         private static void GenerateReport(AuditResult result, string directoryPath)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("=================================================");
-            sb.AppendLine($"RESOURCE AUDIT REPORT: {result.ResourceName}");
-            sb.AppendLine("=================================================");
+            sb.AppendLine("═════════════════════════════════════════════════");
+            sb.AppendLine($"TGToolKit — RESOURCE AUDIT REPORT: {result.ResourceName}");
+            sb.AppendLine("═════════════════════════════════════════════════");
             sb.AppendLine($"Status: {result.OverallStatus}");
             sb.AppendLine($"Total Estimated Memory: {result.TotalEstimatedMB:F2} MB");
             sb.AppendLine("-------------------------------------------------");

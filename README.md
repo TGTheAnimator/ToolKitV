@@ -2,7 +2,7 @@
 
 # 🎨 TGToolKit
 
-**A FiveM texture optimization and vehicle tool — fork of the original ToolKitV by Umbrella.re**
+**A comprehensive FiveM administrative and development utility kit.**
 
 *Optimize textures, fix crashes, and consolidate vehicle meta files for a premium, high-performance FiveM experience.*
 
