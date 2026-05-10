@@ -45,7 +45,7 @@ namespace ToolKitV.Rendering
             public Matrix World;
             public Vector3 LightDir;
             public uint HasTexture;
-            public Vector3 Padding;
+            public Vector4 Padding; // Use Vector4 (16 bytes) to ensure 16-byte alignment (Total: 64+64+12+4+16 = 160)
 
             public Constants()
             {
@@ -53,7 +53,7 @@ namespace ToolKitV.Rendering
                 World = Matrix.Identity;
                 LightDir = Vector3.Zero;
                 HasTexture = 0;
-                Padding = Vector3.Zero;
+                Padding = Vector4.Zero;
             }
         }
 

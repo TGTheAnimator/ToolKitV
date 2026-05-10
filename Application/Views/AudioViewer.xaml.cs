@@ -43,8 +43,10 @@ namespace ToolKitV.Views
                 try
                 {
                     byte[] data = File.ReadAllBytes(openFileDialog.FileName);
+                    var entry = new RpfBinaryFileEntry();
+                    entry.Name = Path.GetFileName(openFileDialog.FileName);
                     var awc = new AwcFile();
-                    awc.Load(data, null);
+                    awc.Load(data, entry);
 
                     if (awc.Streams != null)
                     {

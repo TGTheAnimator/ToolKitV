@@ -5,10 +5,10 @@ class Program
 {
     static void Main()
     {
-        Console.WriteLine("--- AwcFile.Load methods ---");
-        foreach(var m in typeof(AwcFile).GetMethods().Where(m => m.Name == "Load"))
+        Console.WriteLine("--- RpfBinaryFileEntry Constructors ---");
+        foreach(var c in typeof(RpfBinaryFileEntry).GetConstructors())
         {
-            Console.WriteLine($"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name + " " + p.Name))})");
+            Console.WriteLine($"Constructor({string.Join(", ", c.GetParameters().Select(p => p.ParameterType.Name + " " + p.Name))})");
         }
     }
 }

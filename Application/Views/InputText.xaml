@@ -12,7 +12,7 @@
                 Margin="0 14 0 0"
                 HorizontalAlignment="Left"
                 Foreground="White"
-                Style="{StaticResource TT Norms Regular}" 
+                FontFamily="{StaticResource TT Norms Regular}" 
                 FontSize="14" 
                 Content="{Binding Title}"/>
 
@@ -57,7 +57,7 @@
             <Label 
                 HorizontalAlignment="Left"
                 Foreground="#33FFFFFF"
-                Style="{StaticResource TT Norms Regular}"
+                FontFamily="{StaticResource TT Norms Regular}"
                 FontSize="14"
                 Content="{Binding Description}"/>
         </StackPanel>

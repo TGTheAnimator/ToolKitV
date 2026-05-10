@@ -12,14 +12,14 @@
                 <TextBlock 
                     HorizontalAlignment="Left"
                     Foreground="#33FFFFFF"
-                    Style="{StaticResource TT Norms Bold}"
+                    FontFamily="{StaticResource TT Norms Bold}"
                     FontSize="10"
                     Text="TGTA, 2026"/>
 
                 <TextBlock 
                     HorizontalAlignment="Left"
                     Foreground="#33FFFFFF"
-                    Style="{StaticResource TT Norms Regular}"
+                    FontFamily="{StaticResource TT Norms Regular}"
                     FontSize="10"
                     Text="{Binding Version}"/>
             </StackPanel>
