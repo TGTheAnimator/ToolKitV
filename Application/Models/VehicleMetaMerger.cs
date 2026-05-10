@@ -32,6 +32,7 @@ namespace ToolKitV.Models
             public int HandlingMerged;
             public int KitsMerged;
             public int LightsMerged;
+            public int SirenSettingsMerged;
             public int VariationsMerged;
             public int LayoutsMerged;
             public int ConflictsResolved;
@@ -104,7 +105,8 @@ namespace ToolKitV.Models
 
             // 3 ── Merge each type (carcols first — produces the kit ID remapping
             //      that carvariations needs to correct its kit references)
-            Dictionary<string, Dictionary<int, int>> kitIdRemapping = new();
+            Dictionary<string, Dictionary<int, int>> kitIdRemapping   = new();
+            Dictionary<string, Dictionary<int, int>> sirenIdRemapping = new();
 
             XDocument? vehiclesDoc   = null;
             XDocument? handlingDoc   = null;
@@ -121,12 +123,16 @@ namespace ToolKitV.Models
             if (carcolsFiles.Count > 0)
             {
                 log.LogWrite($"Merging {carcolsFiles.Count} carcols.meta files...");
-                (carcolsDoc, var conflicts) = MergeCarColsMeta(carcolsFiles, out kitIdRemapping, log);
-                results.KitsMerged       = carcolsDoc.Root?.Element("Kits")?.Elements("Item").Count()  ?? 0;
-                results.LightsMerged     = carcolsDoc.Root?.Element("Lights")?.Elements("Item").Count() ?? 0;
-                results.ConflictsResolved = conflicts.Count;
-                foreach (var c in conflicts)
+                (carcolsDoc, var kitConflicts, var sirenConflicts) =
+                    MergeCarColsMeta(carcolsFiles, out kitIdRemapping, out sirenIdRemapping, log);
+                results.KitsMerged          = carcolsDoc.Root?.Element("Kits")?.Elements("Item").Count()         ?? 0;
+                results.LightsMerged        = carcolsDoc.Root?.Element("Lights")?.Elements("Item").Count()        ?? 0;
+                results.SirenSettingsMerged = carcolsDoc.Root?.Element("sirenSettings")?.Elements("Item").Count() ?? 0;
+                results.ConflictsResolved   = kitConflicts.Count + sirenConflicts.Count;
+                foreach (var c in kitConflicts)
                     results.Warnings.Add($"Kit ID conflict: '{c.KitName}' in {Path.GetDirectoryName(c.SourceFile)} remapped {c.OldId} → {c.NewId}");
+                foreach (var c in sirenConflicts)
+                    results.Warnings.Add($"Siren ID conflict in {Path.GetDirectoryName(c.SourceFile)}: ID {c.OldId} → {c.NewId}");
             }
 
             progressHandler?.DynamicInvoke(results, 25);
@@ -134,7 +140,7 @@ namespace ToolKitV.Models
             if (variationsFiles.Count > 0)
             {
                 log.LogWrite($"Merging {variationsFiles.Count} carvariations.meta files...");
-                (variationsDoc, int dupes) = MergeCarVariationsMeta(variationsFiles, kitIdRemapping, log);
+                (variationsDoc, int dupes) = MergeCarVariationsMeta(variationsFiles, kitIdRemapping, sirenIdRemapping, log);
                 results.VariationsMerged = variationsDoc.Root?.Element("variationData")?.Elements("Item").Count() ?? 0;
                 results.DuplicatesSkipped += dupes;
             }
@@ -281,19 +287,24 @@ namespace ToolKitV.Models
                 )), dupes);
         }
 
-        // ── Merge: carcols.meta (with modkit ID conflict resolution) ──────────
+        // ── Merge: carcols.meta (with modkit ID + siren ID conflict resolution) ─
 
-        private static (XDocument doc, List<ConflictLog> conflicts) MergeCarColsMeta(
+        private static (XDocument doc, List<ConflictLog> kitConflicts, List<ConflictLog> sirenConflicts) MergeCarColsMeta(
             List<string> files,
             out Dictionary<string, Dictionary<int, int>> kitIdRemapping,
+            out Dictionary<string, Dictionary<int, int>> sirenIdRemapping,
             LogWriter log)
         {
-            kitIdRemapping = new();
-            var conflicts = new List<ConflictLog>();
+            kitIdRemapping   = new();
+            sirenIdRemapping = new();
+            var kitConflicts   = new List<ConflictLog>();
+            var sirenConflicts = new List<ConflictLog>();
 
-            // Load all kit entries, preserving source file path
+            // Load all entries, preserving source file path
             var allKits   = new List<KitEntry>();
             var allLights = new List<XElement>();
+            // (sirenFile, originalId, element)
+            var allSirens = new List<(string File, int Id, XElement Element)>();
 
             foreach (string file in files)
             {
@@ -301,63 +312,93 @@ namespace ToolKitV.Models
 
                 foreach (XElement kit in doc.Root?.Element("Kits")?.Elements("Item") ?? Enumerable.Empty<XElement>())
                 {
-                    string? idStr  = kit.Element("id")?.Attribute("value")?.Value;
-                    string  name   = kit.Element("kitName")?.Value?.Trim() ?? "unknown";
-                    int     id     = int.TryParse(idStr, out int parsed) ? parsed : -1;
+                    string? idStr = kit.Element("id")?.Attribute("value")?.Value;
+                    string  name  = kit.Element("kitName")?.Value?.Trim() ?? "unknown";
+                    int     id    = int.TryParse(idStr, out int kp) ? kp : -1;
                     allKits.Add(new KitEntry(new XElement(kit), file, id, name));
                 }
 
                 foreach (XElement light in doc.Root?.Element("Lights")?.Elements("Item") ?? Enumerable.Empty<XElement>())
                     allLights.Add(new XElement(light));
+
+                foreach (XElement siren in doc.Root?.Element("sirenSettings")?.Elements("Item") ?? Enumerable.Empty<XElement>())
+                {
+                    string? idStr = siren.Element("id")?.Attribute("value")?.Value;
+                    int id = int.TryParse(idStr, out int sp) ? sp : -1;
+                    allSirens.Add((file, id, new XElement(siren)));
+                }
             }
 
-            // Group kits by ID; any group with >1 entry has conflicts
-            var grouped = allKits
+            // ── Kit ID conflict resolution ──────────────────────────────────────
+            var kitGrouped = allKits
                 .Where(k => k.OriginalId >= 0)
                 .GroupBy(k => k.OriginalId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            int nextId = grouped.Keys.Count > 0 ? grouped.Keys.Max() + 1 : 1000;
+            int nextKitId  = kitGrouped.Keys.Count > 0 ? kitGrouped.Keys.Max() + 1 : 1000;
             var mergedKits = new List<XElement>();
 
-            foreach (var group in grouped.Values.OrderBy(g => g[0].OriginalId))
+            foreach (var group in kitGrouped.Values.OrderBy(g => g[0].OriginalId))
             {
-                // First occurrence keeps its ID
                 mergedKits.Add(group[0].Element);
-
-                // Subsequent occurrences get remapped
                 for (int i = 1; i < group.Count; i++)
                 {
                     KitEntry entry  = group[i];
                     XElement cloned = new(entry.Element);
+                    cloned.Element("id")?.SetAttributeValue("value", nextKitId.ToString());
 
-                    XElement? idElem = cloned.Element("id");
-                    if (idElem != null)
-                        idElem.SetAttributeValue("value", nextId.ToString());
-
-                    // Track: which source file needs which remapping
                     if (!kitIdRemapping.ContainsKey(entry.SourceFile))
                         kitIdRemapping[entry.SourceFile] = new();
-                    kitIdRemapping[entry.SourceFile][entry.OriginalId] = nextId;
+                    kitIdRemapping[entry.SourceFile][entry.OriginalId] = nextKitId;
 
-                    conflicts.Add(new ConflictLog(entry.SourceFile, entry.KitName, entry.OriginalId, nextId));
-                    log.LogWrite($"  [CONFLICT] Kit '{entry.KitName}' ID {entry.OriginalId} → {nextId} ({Path.GetDirectoryName(entry.SourceFile)})");
-
+                    kitConflicts.Add(new ConflictLog(entry.SourceFile, entry.KitName, entry.OriginalId, nextKitId));
+                    log.LogWrite($"  [CONFLICT] Kit '{entry.KitName}' ID {entry.OriginalId} → {nextKitId} ({Path.GetDirectoryName(entry.SourceFile)})");
                     mergedKits.Add(cloned);
-                    nextId++;
+                    nextKitId++;
                 }
             }
-
-            // Kits with no id element (rare) pass through unchanged
             foreach (var kit in allKits.Where(k => k.OriginalId < 0))
                 mergedKits.Add(kit.Element);
 
-            return (new XDocument(
-                new XDeclaration("1.0", "UTF-8", null),
-                new XElement("CVehicleModelInfoVarGlobal",
-                    new XElement("Kits",   mergedKits),
-                    new XElement("Lights", allLights)
-                )), conflicts);
+            // ── Siren ID conflict resolution ────────────────────────────────────
+            var sirenGrouped = allSirens
+                .Where(s => s.Id >= 0)
+                .GroupBy(s => s.Id)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            int nextSirenId  = sirenGrouped.Keys.Count > 0 ? sirenGrouped.Keys.Max() + 1 : 10000;
+            var mergedSirens = new List<XElement>();
+
+            foreach (var group in sirenGrouped.Values.OrderBy(g => g[0].Id))
+            {
+                mergedSirens.Add(group[0].Element);
+                for (int i = 1; i < group.Count; i++)
+                {
+                    var (srcFile, oldId, elem) = group[i];
+                    XElement cloned = new(elem);
+                    cloned.Element("id")?.SetAttributeValue("value", nextSirenId.ToString());
+
+                    if (!sirenIdRemapping.ContainsKey(srcFile))
+                        sirenIdRemapping[srcFile] = new();
+                    sirenIdRemapping[srcFile][oldId] = nextSirenId;
+
+                    sirenConflicts.Add(new ConflictLog(srcFile, $"siren#{oldId}", oldId, nextSirenId));
+                    log.LogWrite($"  [CONFLICT] Siren ID {oldId} → {nextSirenId} ({Path.GetDirectoryName(srcFile)})");
+                    mergedSirens.Add(cloned);
+                    nextSirenId++;
+                }
+            }
+            foreach (var (_, id, elem) in allSirens.Where(s => s.Id < 0))
+                mergedSirens.Add(elem);
+
+            var root = new XElement("CVehicleModelInfoVarGlobal",
+                new XElement("Kits",   mergedKits),
+                new XElement("Lights", allLights));
+            if (mergedSirens.Count > 0)
+                root.Add(new XElement("sirenSettings", mergedSirens));
+
+            return (new XDocument(new XDeclaration("1.0", "UTF-8", null), root),
+                kitConflicts, sirenConflicts);
         }
 
         // ── Merge: carvariations.meta ─────────────────────────────────────────
@@ -365,6 +406,7 @@ namespace ToolKitV.Models
         private static (XDocument doc, int duplicatesSkipped) MergeCarVariationsMeta(
             List<string> files,
             Dictionary<string, Dictionary<int, int>> kitIdRemapping,
+            Dictionary<string, Dictionary<int, int>> sirenIdRemapping,
             LogWriter log)
         {
             var items = new List<XElement>();
@@ -376,8 +418,14 @@ namespace ToolKitV.Models
                 XDocument doc = SafeLoad(file, log);
                 string fileDir = Path.GetDirectoryName(file)!;
 
-                // Find the remapping that applies to carcols.meta in the same folder
-                Dictionary<int, int>? remapping = kitIdRemapping
+                // Find the remappings that apply to carcols.meta in the same folder
+                Dictionary<int, int>? kitRemap = kitIdRemapping
+                    .Where(kvp => Path.GetDirectoryName(kvp.Key)
+                        .Equals(fileDir, StringComparison.OrdinalIgnoreCase))
+                    .Select(kvp => kvp.Value)
+                    .FirstOrDefault();
+
+                Dictionary<int, int>? sirenRemap = sirenIdRemapping
                     .Where(kvp => Path.GetDirectoryName(kvp.Key)
                         .Equals(fileDir, StringComparison.OrdinalIgnoreCase))
                     .Select(kvp => kvp.Value)
@@ -390,15 +438,23 @@ namespace ToolKitV.Models
 
                     XElement cloned = new(item);
 
-                    // Apply kit ID remapping if this folder had carcols conflicts
-                    if (remapping != null)
+                    // Apply kit ID remapping
+                    if (kitRemap != null)
                     {
                         foreach (XElement kitRef in cloned.Element("kits")?.Elements("Item") ?? Enumerable.Empty<XElement>())
                         {
                             XAttribute? val = kitRef.Attribute("value");
-                            if (val != null && int.TryParse(val.Value, out int oldId) && remapping.TryGetValue(oldId, out int newId))
+                            if (val != null && int.TryParse(val.Value, out int oldId) && kitRemap.TryGetValue(oldId, out int newId))
                                 val.SetValue(newId.ToString());
                         }
+                    }
+
+                    // Apply siren ID remapping
+                    if (sirenRemap != null)
+                    {
+                        XAttribute? sirenVal = cloned.Element("sirenSettings")?.Attribute("value");
+                        if (sirenVal != null && int.TryParse(sirenVal.Value, out int oldSirenId) && sirenRemap.TryGetValue(oldSirenId, out int newSirenId))
+                            sirenVal.SetValue(newSirenId.ToString());
                     }
 
                     items.Add(cloned);
@@ -506,11 +562,11 @@ namespace ToolKitV.Models
             sb.AppendLine(new string('─', 50));
             sb.AppendLine($"vehicles.meta    files found:  {results.VehiclesFilesFound}  →  {results.VehiclesMerged} vehicles merged");
             sb.AppendLine($"handling.meta    files found:  {results.HandlingFilesFound}  →  {results.HandlingMerged} entries merged");
-            sb.AppendLine($"carcols.meta     files found:  {results.CarcolsFilesFound}  →  {results.KitsMerged} kits / {results.LightsMerged} lights merged");
+            sb.AppendLine($"carcols.meta     files found:  {results.CarcolsFilesFound}  →  {results.KitsMerged} kits / {results.LightsMerged} lights / {results.SirenSettingsMerged} siren settings merged");
             sb.AppendLine($"carvariations    files found:  {results.VariationsFilesFound}  →  {results.VariationsMerged} variations merged");
             sb.AppendLine($"vehiclelayouts   files found:  {results.LayoutsFilesFound}  →  {results.LayoutsMerged} layouts merged");
             sb.AppendLine();
-            sb.AppendLine($"Modkit ID conflicts resolved: {results.ConflictsResolved}");
+            sb.AppendLine($"Kit/Siren ID conflicts resolved: {results.ConflictsResolved}");
             sb.AppendLine($"Duplicates skipped:           {results.DuplicatesSkipped}");
             if (results.Warnings?.Count > 0)
             {

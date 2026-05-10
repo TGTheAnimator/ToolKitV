@@ -20,9 +20,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="CodeWalker.Core">
-      <HintPath>Dependencies\CodeWalker.Core.dll</HintPath>
-    </Reference>
+    <PackageReference Include="CodeWalker.Core" Version="1.0.3" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\Images\clothesIcon.png" />
