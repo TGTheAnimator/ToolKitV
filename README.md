@@ -74,7 +74,7 @@
 
 1. Download the latest **`TGToolKit-v2.1.0.zip`** from the [Releases](../../releases) page.
 2. Extract the zip to any folder.
-3. Run **`TGToolKit.exe`**.
+3. Run **`TGToolKit.exe`** and enjoy!
 
 ---
 
