@@ -7,13 +7,14 @@ namespace ToolKitV
     public partial class App : Application
     {
         protected Mutex? Mutex;
+        private bool _ownsMutex;
 
         protected override void OnStartup(StartupEventArgs e)
         {
             // Single-instance guard — prevent running TGToolKit more than once at a time.
-            Mutex = new Mutex(true, "TGToolKit_SingleInstance");
+            Mutex = new Mutex(true, "TGToolKit_SingleInstance", out _ownsMutex);
 
-            if (!Mutex.WaitOne(0, false))
+            if (!_ownsMutex)
             {
                 MessageBox.Show(
                     "TGToolKit is already running.",
@@ -30,7 +31,10 @@ namespace ToolKitV
 
         protected override void OnExit(ExitEventArgs e)
         {
-            Mutex?.ReleaseMutex();
+            if (_ownsMutex)
+            {
+                Mutex?.ReleaseMutex();
+            }
             Mutex?.Dispose();
             base.OnExit(e);
         }
