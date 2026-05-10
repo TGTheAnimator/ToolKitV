@@ -178,7 +178,7 @@
                        FontFamily="Fonts/#TT Norms"
                        FontSize="10"
                        FontWeight="Bold"/>
-            <TextBlock Text="v1.1.0"
+            <TextBlock Text="v1.2.0"
                        Foreground="#25FFFFFF"
                        FontFamily="Fonts/#TT Norms"
                        FontSize="9"/>

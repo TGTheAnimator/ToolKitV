@@ -24,12 +24,18 @@
 - 🛡️ **Mip-chain Validation** — Automatically fixes missing or incorrect mipmap chains to prevent shimmering.
 - 📊 **Accurate Metrics** — Real-time tracking of Virtual (GPU) size vs. Physical (Disk) size.
 
-### 🚗 Vehicle Tools (NEW)
+### 🚗 Vehicle Tools (UPDATED)
 - 🔗 **Meta Consolidation** — Merges hundreds of individual `.meta` files into master files.
   - Fixes the `productId != ProductID::INVALID` fatal crash caused by too many mini-DLCs.
   - Merges: `vehicles.meta`, `handling.meta`, `carcols.meta`, `carvariations.meta`, `vehiclelayouts.meta`.
-  - 🛠️ **Modkit ID Conflict Resolution** — Automatically detects and remaps conflicting modkit IDs in `carcols.meta` and updates `carvariations.meta` references to match.
+  - 🛠️ **Modkit & Siren ID Conflict Resolution** — Automatically detects and remaps conflicting modkit IDs and `sirenSettings` IDs in `carcols.meta` and updates `carvariations.meta` references to match. Guarantees police emergency lights and tuning parts won't break when merged!
   - 📝 **FXManifest Generator** — Automatically generates the required `fxmanifest.lua` snippet for your merged resource.
+
+### 📊 Asset Analyzer (NEW)
+- 🔍 **Real Streaming Budget** — Scans an entire resource folder and calculates the **exact memory footprint** `resmon` reports on the server.
+- 📐 **RSC7 Virtual VRAM Tracking** — Reads the native RSC7 headers for `.ytd`, `.yft`, `.ydr`, `.ydd`, and `.ybn` files to report their true decompressed size, instead of misleading disk size.
+- 🎧 **Audio Analysis** — Tracks `.awc` soundbank sizes and limits to ensure vehicle sound mods don't blow up your budget.
+- 🛠️ **Actionable Recommendations** — Explicitly tells you how to fix oversized YFTs, compress YTDs, or handle heavy audio files.
 
 ### ⚠️ Crash Fixes
 - 🔬 **Dedicated Script RT Fix** — One-click scan to decompress `script_rt_*` textures (like dials/radios).
@@ -58,7 +64,7 @@
 
 ### Installation
 
-1. Download the latest **`TGToolKit-v1.1.0.zip`** from the [Releases](../../releases) page.
+1. Download the latest **`TGToolKit-v1.2.0.zip`** from the [Releases](../../releases) page.
 2. Extract the zip to any folder.
 3. Run **`TGToolKit.exe`**.
 
@@ -74,8 +80,13 @@
 ### Vehicles
 1. **Select Pack Folder** — Point it at the root of a large vehicle pack (e.g. `tebex-car-pack/`).
 2. **Scan** to see how many meta files were found.
-3. **Merge** to consolidate everything into a single `data/` folder.
-4. Copy the `fxmanifest_snippet.lua` content into your resource manifest.
+3. **Scan Models** to quickly identify oversized YFTs before merging.
+4. **Merge** to consolidate everything into a single `data/` folder.
+5. Copy the `fxmanifest_snippet.lua` content into your resource manifest.
+
+### Asset Analyzer
+1. **Select Resource Folder** — Point it at the root of any resource folder.
+2. **Run Asset Audit** to see the true memory footprint and identify any budget hogs.
 
 ---
 
