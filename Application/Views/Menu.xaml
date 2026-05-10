@@ -243,10 +243,21 @@
                        FontFamily="Fonts/#TT Norms"
                        FontSize="10"
                        FontWeight="Bold"/>
-            <TextBlock Text="v2.0.0"
+            <TextBlock x:Name="VersionText"
+                       Text="v2.1.0"
                        Foreground="#25FFFFFF"
                        FontFamily="Fonts/#TT Norms"
                        FontSize="9"/>
+            <TextBlock x:Name="UpdateBanner"
+                       Text="• UPDATE AVAILABLE"
+                       Foreground="#4CFF70"
+                       FontFamily="Fonts/#TT Norms"
+                       FontSize="9"
+                       FontWeight="Bold"
+                       Margin="0 2 0 0"
+                       Cursor="Hand"
+                       Visibility="Collapsed"
+                       MouseLeftButtonDown="UpdateBanner_Click"/>
         </StackPanel>
     </Grid>
 </UserControl>

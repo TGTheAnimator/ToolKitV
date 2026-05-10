@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using ToolKitV.Models;
+using System.Threading.Tasks;
 
 namespace ToolKitV.Views
 {
@@ -20,6 +22,39 @@ namespace ToolKitV.Views
         {
             InitializeComponent();
             SetActiveItem("TextureOptimizer");
+            Loaded += Menu_Loaded;
+        }
+
+        private async void Menu_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Small delay to let the app finish loading
+            await Task.Delay(1000);
+            
+            var release = await Updater.CheckForUpdatesAsync();
+            if (release != null)
+            {
+                UpdateBanner.Visibility = Visibility.Visible;
+                UpdateBanner.Tag = release;
+            }
+        }
+
+        private async void UpdateBanner_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (UpdateBanner.Tag is Updater.ReleaseInfo release)
+            {
+                var result = MessageBox.Show(
+                    $"A new version ({release.tag_name}) is available!\n\nWould you like to download and install it now?\n\n(The app will restart automatically)",
+                    "TGToolKit — Update Available",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    UpdateBanner.Text = "• UPDATING...";
+                    UpdateBanner.IsEnabled = false;
+                    await Updater.ApplyUpdateAsync(release);
+                }
+            }
         }
 
         // ── Click handlers ────────────────────────────────────────────────────

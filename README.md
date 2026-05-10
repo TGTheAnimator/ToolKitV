@@ -24,6 +24,7 @@
 - 🎯 **Oversized-only mode** — Process only YTDs that exceed the FiveM 16 MB streaming budget.
 - 🛡️ **Mip-chain Validation** — Automatically fixes missing or incorrect mipmap chains to prevent shimmering.
 - 📊 **Accurate Metrics** — Real-time tracking of Virtual (GPU) size vs. Physical (Disk) size.
+- 🔄 **Built-in Updater** — One-click updates pulled directly from the GitHub repository.
 
 ### 🚗 Vehicle Tools (UPDATED)
 - 🔗 **Meta Consolidation** — Merges hundreds of individual `.meta` files into master files.
