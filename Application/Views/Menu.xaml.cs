@@ -45,6 +45,13 @@ namespace ToolKitV.Views
             NavigateTo?.Invoke("AssetAnalyzer");
         }
 
+        private void ClothingTools_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_activeView == "ClothingTools") return;
+            SetActiveItem("ClothingTools");
+            NavigateTo?.Invoke("ClothingTools");
+        }
+
         // ── Visual state ──────────────────────────────────────────────────────
 
         private void SetActiveItem(string view)
@@ -54,6 +61,7 @@ namespace ToolKitV.Views
             bool texActive      = view == "TextureOptimizer";
             bool vehiclesActive = view == "VehicleTools";
             bool assetActive    = view == "AssetAnalyzer";
+            bool clothingActive = view == "ClothingTools";
 
             // Texture Optimizer item
             TextureOptimizerBg.Visibility         = texActive ? Visibility.Visible   : Visibility.Collapsed;
@@ -79,6 +87,15 @@ namespace ToolKitV.Views
             AssetAnalyzerStripe.Visibility     = assetActive ? Visibility.Visible   : Visibility.Collapsed;
             AssetAnalyzerLabel.FontWeight      = assetActive ? FontWeights.Bold     : FontWeights.Normal;
             AssetAnalyzerLabel.Foreground      = assetActive
+                ? new SolidColorBrush(Colors.White)
+                : new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
+
+            // Clothing Tools item
+            ClothingToolsBg.Visibility         = clothingActive ? Visibility.Visible   : Visibility.Collapsed;
+            ClothingToolsInactiveBg.Visibility = clothingActive ? Visibility.Collapsed : Visibility.Visible;
+            ClothingToolsStripe.Visibility     = clothingActive ? Visibility.Visible   : Visibility.Collapsed;
+            ClothingToolsLabel.FontWeight      = clothingActive ? FontWeights.Bold     : FontWeights.Normal;
+            ClothingToolsLabel.Foreground      = clothingActive
                 ? new SolidColorBrush(Colors.White)
                 : new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
         }
