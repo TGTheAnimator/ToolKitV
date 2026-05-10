@@ -45,7 +45,6 @@
   - Forces uncompressed `B8G8R8A8` format as required by the GTA V engine.
 
 ### 💅 Modern UI
-- **Glassmorphism Design** — A sleek, premium dark-themed interface with red accents.
 - **Universal Drag-and-Drop** — Instantly load any folder by dropping it into the application window.
 - **Responsive & Fast** — Built on .NET 8 for maximum performance.
 - **Single-Instance** — No installers, no updaters, just run and optimize.
