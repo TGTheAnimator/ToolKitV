@@ -11,117 +11,152 @@
         ResizeMode="NoResize"
         FocusVisualStyle="{x:Null}">
 
+    <!-- Deep dark background with a subtle red-tinted radial glow -->
     <Window.Background>
-        <ImageBrush ImageSource="../Assets/Images/BG.jpg"></ImageBrush>
+        <SolidColorBrush Color="#0D0D0F"/>
     </Window.Background>
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="22"/>
-            <RowDefinition Height="78"/>
-            <RowDefinition Height="530"/>
-            <RowDefinition/>
+            <RowDefinition Height="48"/>
+            <!-- Title bar -->
+            <RowDefinition Height="*"/>
+            <!-- Content -->
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" MouseDown="StackPanel_MouseDown" Background="Transparent">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Width="120" Grid.Row="0" Margin="15 0 0 0">
-                <TextBlock Text="TGToolKit"
-                        Foreground="#FFFFFF"
-                        VerticalAlignment="Top"
-                        HorizontalAlignment="Center"
-                        FontSize="10px"
-                        Margin="0, 5, 0, 0"
-                        Typography.Capitals="AllSmallCaps"
-                        Grid.Row="0"
-                        Style="{StaticResource TT Norms Medium}"
-                    />
-            </StackPanel>
+        <!-- Ambient red glow overlay in top-left -->
+        <Ellipse Grid.RowSpan="2"
+                 Width="600" Height="400"
+                 HorizontalAlignment="Left" VerticalAlignment="Top"
+                 Margin="-100 -150 0 0"
+                 IsHitTestVisible="False">
+            <Ellipse.Fill>
+                <RadialGradientBrush>
+                    <GradientStop Color="#25C0132A" Offset="0"/>
+                    <GradientStop Color="#00000000" Offset="1"/>
+                </RadialGradientBrush>
+            </Ellipse.Fill>
+        </Ellipse>
 
-            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Background="Transparent" Grid.Row="0" Margin="0, -16, 0, 0">
-                <Button
-                    Cursor="Hand"
-                    BorderThickness="0"
-                    Click="MinimizeButton_Click"
-                    >
-
-                    <Image Width="12" Height="12" Source="../Assets/Images/minus-outlined.png"/>
-
-                    <Button.Style>
-                        <Style TargetType="{x:Type Button}">
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#14FFFFFF"/>
-                                </Trigger>
-                            </Style.Triggers>
-
-                        </Style>
-                    </Button.Style>
-
-                    <Button.Template>
-                        <ControlTemplate TargetType="{x:Type Button}">
-                            <Border 
-                                Width="30" 
-                                Height="22"
-                                Background="{TemplateBinding Background}">
-
-                                <ContentPresenter
-                                    VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"/>
-                            </Border>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <Button
-                    Cursor="Hand"
-                    BorderThickness="0"
-                    Click="CloseButton_Click"
-                    >
-
-                    <Image Width="12" Height="12" Source="../Assets/Images/cross.png"/>
-
-                    <Button.Style>
-                        <Style TargetType="{x:Type Button}">
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="IndianRed"/>
-                                </Trigger>
-                            </Style.Triggers>
-
-                        </Style>
-                    </Button.Style>
-
-                    <Button.Template>
-                        <ControlTemplate TargetType="{x:Type Button}">
-                            <Border 
-                                Width="30" 
-                                Height="22"
-                                Background="{TemplateBinding Background}">
-
-                                <ContentPresenter
-                                    VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"/>
-                            </Border>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-            </StackPanel>
-        </StackPanel>
-
-        <Grid Grid.Row="2">
+        <!-- ═══════════════ TITLE BAR ═══════════════ -->
+        <Grid Grid.Row="0" MouseDown="StackPanel_MouseDown" Background="Transparent">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="50"/>
-                <ColumnDefinition Width="220"/>
-                <ColumnDefinition Width="200"/>
-                <ColumnDefinition/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <uc:Menu Grid.Column="1" />
-            <uc:TextureOptimization Grid.Column="3" />
+            <!-- Logo + name -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="20 0 0 0">
+                <!-- Red accent bar -->
+                <Border Width="3" Height="18" CornerRadius="2" Margin="0 0 10 0">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#FF3A3A" Offset="0"/>
+                            <GradientStop Color="#C0132A" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+                <TextBlock Text="TGToolKit"
+                           Foreground="#FFFFFF"
+                           FontFamily="Fonts/#TT Norms"
+                           FontSize="14"
+                           FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="  FiveM Texture Optimizer"
+                           Foreground="#4DFFFFFF"
+                           FontFamily="Fonts/#TT Norms"
+                           FontSize="11"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Window controls -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0 0 8 0">
+                <Button Cursor="Hand" BorderThickness="0" Click="MinimizeButton_Click" ToolTip="Minimize">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Width="36" Height="36" CornerRadius="6"
+                                                Background="{TemplateBinding Background}">
+                                            <TextBlock Text="—" Foreground="#80FFFFFF" FontSize="11"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#18FFFFFF"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Cursor="Hand" BorderThickness="0" Click="CloseButton_Click" ToolTip="Close">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Width="36" Height="36" CornerRadius="6"
+                                                Background="{TemplateBinding Background}">
+                                            <TextBlock Text="✕" Foreground="#80FFFFFF" FontSize="11"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#BEC0132A"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
         </Grid>
 
-        <uc:Credits Margin="30 40 0 0" Grid.Row="3"/>
+        <!-- Thin red separator line under title bar -->
+        <Rectangle Grid.Row="0" Height="1" VerticalAlignment="Bottom">
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#C0132A" Offset="0"/>
+                    <GradientStop Color="#40C0132A" Offset="0.5"/>
+                    <GradientStop Color="#00000000" Offset="1"/>
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+
+        <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220"/>
+                <!-- Sidebar -->
+                <ColumnDefinition Width="1"/>
+                <!-- Divider -->
+                <ColumnDefinition Width="*"/>
+                <!-- Main panel -->
+            </Grid.ColumnDefinitions>
+
+            <!-- Sidebar separator -->
+            <Rectangle Grid.Column="1">
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#30FFFFFF" Offset="0"/>
+                        <GradientStop Color="#05FFFFFF" Offset="1"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <!-- ─── SIDEBAR ─── -->
+            <uc:Menu Grid.Column="0"/>
+
+            <!-- ─── MAIN PANEL ─── -->
+            <uc:TextureOptimization Grid.Column="2"/>
+        </Grid>
     </Grid>
 </Window>

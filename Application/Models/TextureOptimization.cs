@@ -44,6 +44,23 @@ namespace ToolkitV.Models
             }
         }
 
+        /// <summary>
+        /// Result data returned by <see cref="FixScriptRTs"/>.
+        /// </summary>
+        public struct ScriptRtResultsData
+        {
+            public int ytdsScanned;
+            public int ytdsFixed;
+            public int texturesFixed;
+
+            public ScriptRtResultsData()
+            {
+                ytdsScanned  = 0;
+                ytdsFixed    = 0;
+                texturesFixed = 0;
+            }
+        }
+
         // ─── Temporary DDS file helpers ──────────────────────────────────────────
 
         /// <summary>
@@ -241,8 +258,11 @@ namespace ToolkitV.Models
         }
 
         /// <summary>
-        /// Script render-target textures must be uncompressed (R8G8B8A8).
-        /// GTA V will crash or render garbage if they are block-compressed.
+        /// Script render-target textures must be uncompressed (B8G8R8A8 = D3DFMT_A8R8G8B8).
+        /// GTA V will fatal-crash if they are block-compressed (DXT/ATI/BC formats).
+        ///
+        /// IMPORTANT: the correct DXGI format is B8G8R8A8_UNORM — this maps to D3D9's
+        /// A8R8G8B8 byte order. R8G8B8A8_UNORM would produce colour-channel swapping.
         /// </summary>
         private static Texture UncompressScriptTexture(Texture texture)
         {
@@ -251,7 +271,8 @@ namespace ToolkitV.Models
 
             try
             {
-                texture = ConvertTexture(texture, "R8G8B8A8_UNORM", tempPath);
+                // B8G8R8A8_UNORM = D3DFMT_A8R8G8B8 — what GTA V expects for script render targets.
+                texture = ConvertTexture(texture, "B8G8R8A8_UNORM", tempPath);
             }
             finally
             {
@@ -463,6 +484,90 @@ namespace ToolkitV.Models
 
             optimizeProgressHandler?.DynamicInvoke(results, 100);
             log.LogWrite("=== TGToolKit optimisation finished ===");
+            return results;
+        }
+
+        // ─── Public API — Fix Script RT Crashes ──────────────────────────────────
+
+        /// <summary>
+        /// Scans every .ytd under <paramref name="inputDirectory"/> (all subfolders)
+        /// and decompresses any <c>script_rt_*</c> texture that is block-compressed.
+        ///
+        /// This is the targeted fix for fatal GTA V crashes caused by textures such as
+        /// <c>script_rt_dials_itali</c> inside <c>gsts121.ytd</c>.
+        ///
+        /// The operation is completely independent of the Optimize settings — it always
+        /// processes every YTD regardless of file size or the onlyOverSized toggle.
+        /// </summary>
+        public static ScriptRtResultsData FixScriptRTs(
+            string   inputDirectory,
+            string   backupDirectory,
+            Delegate progressHandler)
+        {
+            ScriptRtResultsData results  = new();
+            string[] inputFiles          = Directory.GetFiles(inputDirectory, "*.ytd", SearchOption.AllDirectories);
+            bool     doBackup            = !string.IsNullOrEmpty(backupDirectory);
+            int      currentProgress     = 0;
+
+            LogWriter log = new("=== TGToolKit Script RT Fix started ===");
+
+            for (int i = 0; i < inputFiles.Length; i++)
+            {
+                string filePath = inputFiles[i];
+                string fileName = Path.GetFileName(filePath);
+
+                results.ytdsScanned++;
+
+                YtdFile ytdFile;
+                try
+                {
+                    ytdFile = CreateYtdFile(filePath);
+                }
+                catch (Exception ex)
+                {
+                    log.LogWrite($"  ERROR loading {fileName}: {ex.Message}");
+                    goto Progress;
+                }
+
+                bool ytdChanged = false;
+
+                for (int j = 0; j < ytdFile.TextureDict.Textures.Count; j++)
+                {
+                    Texture texture = ytdFile.TextureDict.Textures[j];
+
+                    bool isScriptRt = texture.Name.Contains("script_rt", StringComparison.OrdinalIgnoreCase);
+                    if (!isScriptRt || !IsTextureCompressed(texture))
+                        continue;
+
+                    log.LogWrite($"[FIX] {fileName} → decompressing script RT '{texture.Name}' ({texture.Format})");
+
+                    if (!ytdChanged && doBackup)
+                        BackupFile(filePath, fileName, inputDirectory, backupDirectory, log);
+
+                    ytdFile.TextureDict.Textures.data_items[j] = UncompressScriptTexture(texture);
+                    results.texturesFixed++;
+                    ytdChanged = true;
+                }
+
+                if (ytdChanged)
+                {
+                    byte[] newData = ytdFile.Save();
+                    File.WriteAllBytes(filePath, newData);
+                    results.ytdsFixed++;
+                    log.LogWrite($"  Saved {fileName} with {results.texturesFixed} script RT(s) decompressed.");
+                }
+
+                Progress:
+                int progress = i * 100 / inputFiles.Length;
+                if (currentProgress != progress)
+                {
+                    progressHandler?.DynamicInvoke(results, progress);
+                    currentProgress = progress;
+                }
+            }
+
+            progressHandler?.DynamicInvoke(results, 100);
+            log.LogWrite("=== TGToolKit Script RT Fix finished ===");
             return results;
         }
 
