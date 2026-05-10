@@ -24,17 +24,28 @@
         <!-- Nav items -->
         <StackPanel Grid.Row="1" Margin="10 0">
 
-            <!-- Texture Optimizer — ACTIVE -->
-            <Border Height="46" CornerRadius="8" Margin="0 2" Cursor="Hand">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#30C0132A" Offset="0"/>
-                        <GradientStop Color="#15C0132A" Offset="1"/>
-                    </LinearGradientBrush>
-                </Border.Background>
-                <!-- Left accent stripe -->
+            <!-- Texture Optimizer -->
+            <Border x:Name="TextureOptimizerItem"
+                    Height="46" CornerRadius="8" Margin="0 2"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="TextureOptimizer_Click">
                 <Grid>
-                    <Rectangle Width="3" HorizontalAlignment="Left" RadiusX="2" RadiusY="2">
+                    <!-- Active gradient bg (visible when selected) -->
+                    <Border x:Name="TextureOptimizerBg" CornerRadius="8">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#30C0132A" Offset="0"/>
+                                <GradientStop Color="#15C0132A" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <!-- Inactive bg (visible when not selected) -->
+                    <Border x:Name="TextureOptimizerInactiveBg" CornerRadius="8"
+                            Background="#10FFFFFF" Visibility="Collapsed"/>
+
+                    <!-- Left accent stripe (active only) -->
+                    <Rectangle x:Name="TextureOptimizerStripe"
+                               Width="3" HorizontalAlignment="Left" RadiusX="2" RadiusY="2">
                         <Rectangle.Fill>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                 <GradientStop Color="#FF5555" Offset="0"/>
@@ -42,9 +53,11 @@
                             </LinearGradientBrush>
                         </Rectangle.Fill>
                     </Rectangle>
+
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14 0 0 0">
                         <TextBlock Text="🖼" FontSize="14" VerticalAlignment="Center" Margin="0 0 10 0"/>
-                        <TextBlock Text="Texture Optimizer"
+                        <TextBlock x:Name="TextureOptimizerLabel"
+                                   Text="Texture Optimizer"
                                    Foreground="#FFFFFFFF"
                                    FontFamily="Fonts/#TT Norms"
                                    FontSize="13"
@@ -54,23 +67,46 @@
                 </Grid>
             </Border>
 
-            <!-- Vehicles — Coming Soon -->
-            <Border Height="46" CornerRadius="8" Margin="0 2" Opacity="0.35" Cursor="Arrow">
-                <Border.Background><SolidColorBrush Color="#10FFFFFF"/></Border.Background>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="17 0 0 0">
-                    <TextBlock Text="🚗" FontSize="14" VerticalAlignment="Center" Margin="0 0 10 0"/>
-                    <StackPanel>
-                        <TextBlock Text="Vehicles"
-                                   Foreground="#80FFFFFF"
+            <!-- Vehicles -->
+            <Border x:Name="VehiclesItem"
+                    Height="46" CornerRadius="8" Margin="0 2"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="Vehicles_Click">
+                <Grid>
+                    <!-- Active gradient bg -->
+                    <Border x:Name="VehiclesBg" CornerRadius="8" Visibility="Collapsed">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#30C0132A" Offset="0"/>
+                                <GradientStop Color="#15C0132A" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <!-- Inactive bg -->
+                    <Border x:Name="VehiclesInactiveBg" CornerRadius="8" Background="#10FFFFFF"/>
+
+                    <!-- Left accent stripe (hidden when inactive) -->
+                    <Rectangle x:Name="VehiclesStripe"
+                               Width="3" HorizontalAlignment="Left" RadiusX="2" RadiusY="2"
+                               Visibility="Collapsed">
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#FF5555" Offset="0"/>
+                                <GradientStop Color="#C0132A" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="17 0 0 0">
+                        <TextBlock Text="🚗" FontSize="14" VerticalAlignment="Center" Margin="0 0 10 0"/>
+                        <TextBlock x:Name="VehiclesLabel"
+                                   Text="Vehicle Tools"
+                                   Foreground="#B0FFFFFF"
                                    FontFamily="Fonts/#TT Norms"
                                    FontSize="13"
                                    VerticalAlignment="Center"/>
-                        <TextBlock Text="Coming soon"
-                                   Foreground="#40FFFFFF"
-                                   FontFamily="Fonts/#TT Norms"
-                                   FontSize="9"/>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Clothes — Coming Soon -->
@@ -100,7 +136,7 @@
                        FontFamily="Fonts/#TT Norms"
                        FontSize="10"
                        FontWeight="Bold"/>
-            <TextBlock Text="v1.0.0 — FiveM Edition"
+            <TextBlock Text="v1.1.0"
                        Foreground="#25FFFFFF"
                        FontFamily="Fonts/#TT Norms"
                        FontSize="9"/>

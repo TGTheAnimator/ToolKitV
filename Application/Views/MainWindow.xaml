@@ -62,7 +62,8 @@
                            FontSize="14"
                            FontWeight="Bold"
                            VerticalAlignment="Center"/>
-                <TextBlock Text="  FiveM Texture Optimizer"
+                <TextBlock x:Name="AppSubtitle"
+                           Text="  FiveM Texture Optimizer"
                            Foreground="#4DFFFFFF"
                            FontFamily="Fonts/#TT Norms"
                            FontSize="11"
@@ -153,10 +154,10 @@
             </Rectangle>
 
             <!-- ─── SIDEBAR ─── -->
-            <uc:Menu Grid.Column="0"/>
+            <uc:Menu x:Name="SideMenu" Grid.Column="0"/>
 
-            <!-- ─── MAIN PANEL ─── -->
-            <uc:TextureOptimization Grid.Column="2"/>
+            <!-- ─── MAIN PANEL (content swaps on navigation) ─── -->
+            <ContentControl x:Name="MainContent" Grid.Column="2"/>
         </Grid>
     </Grid>
 </Window>
