@@ -45,6 +45,9 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\Images\logo.ico" />
+    <Content Include="Models\Rendering\DefaultShader.hlsl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\Images\bg.bmp" />
