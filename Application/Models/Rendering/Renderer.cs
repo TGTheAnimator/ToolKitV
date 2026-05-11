@@ -1,14 +1,13 @@
-// TGToolKit — 3D Renderer (v2 — CodeWalker-accurate)
-// Architecture mirrors CodeWalker's Renderable.cs:
-//   - Raw VertexBytes uploaded directly to GPU (no manual decompression)
-//   - Dynamic InputLayout per geometry based on VertexType flags
-//   - Correct stride/topology from DrawableGeometry metadata
+// TGToolKit — 3D Renderer (v3 — proper per-geometry texture binding)
+// Architecture:
+//   - Raw VertexBytes uploaded to GPU (no decompression)
+//   - Dynamic InputLayout per geometry from VertexType flags
+//   - Per-geometry texture binding via ShaderGroup.ShaderMapping
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Windows;
 using CodeWalker.GameFiles;
 using SharpDX;
 using SharpDX.Direct3D;
@@ -22,19 +21,19 @@ using Format = SharpDX.DXGI.Format;
 namespace ToolKitV.Models.Rendering
 {
     // -------------------------------------------------------------------------
-    // Constant buffer — must be 16-byte aligned (padded to 256 is safest)
+    // Constant buffer — 16-byte aligned
     // -------------------------------------------------------------------------
     [StructLayout(LayoutKind.Explicit, Size = 96)]
     struct SceneConstants
     {
-        [FieldOffset(0)]  public Matrix WorldViewProj;  // 64 bytes
-        [FieldOffset(64)] public Vector3 LightDir;      // 12 bytes
-        [FieldOffset(76)] public float   HasTexture;    //  4 bytes  (float bool)
-        [FieldOffset(80)] public Vector4 Ambient;       // 16 bytes
+        [FieldOffset(0)]  public Matrix  WorldViewProj;
+        [FieldOffset(64)] public Vector3 LightDir;
+        [FieldOffset(76)] public float   HasTexture;
+        [FieldOffset(80)] public Vector4 Ambient;
     }
 
     // -------------------------------------------------------------------------
-    // Per-geometry GPU resources
+    // Per-geometry GPU data + the texture name this geometry uses
     // -------------------------------------------------------------------------
     class GeometryGpuData : IDisposable
     {
@@ -43,6 +42,7 @@ namespace ToolKitV.Models.Rendering
         public InputLayout? Layout;
         public int          VertexStride;
         public int          IndexCount;
+        public string?      TextureName;  // resolved from ShaderGroup.ShaderMapping
 
         public void Dispose()
         {
@@ -53,15 +53,13 @@ namespace ToolKitV.Models.Rendering
     }
 
     // -------------------------------------------------------------------------
-    // Main Renderer
-    // -------------------------------------------------------------------------
     public class Renderer : IDisposable
     {
         // DX resources
         private Device        _device;
         private DeviceContext _context;
 
-        // Render target + depth
+        // Render target
         private Texture2D?         _rtTex;
         private RenderTargetView?  _rtv;
         private Texture2D?         _depthTex;
@@ -72,24 +70,23 @@ namespace ToolKitV.Models.Rendering
         public DX11ImageSource ImageSource => _imageSource;
 
         // Pipeline
-        private VertexShader?  _vs;
-        private PixelShader?   _ps;
-        private Buffer         _cb;
-        private SamplerState   _sampler;
+        private VertexShader?   _vs;
+        private PixelShader?    _ps;
+        private Buffer          _cb;
+        private SamplerState    _sampler;
         private RasterizerState _rs;
-        private byte[]?        _vsBlob;
+        private byte[]?         _vsBlob;
 
-        // Texture cache — name → SRV, supports multiple YTD textures
-        private readonly Dictionary<string, ShaderResourceView> _textures = new(StringComparer.OrdinalIgnoreCase);
-        private ShaderResourceView? _diffuseSrv; // currently active texture
-
+        // Texture cache: name → SRV (case-insensitive, matches YTD names)
+        private readonly Dictionary<string, ShaderResourceView> _textures
+            = new(StringComparer.OrdinalIgnoreCase);
 
         // Model
         private readonly List<GeometryGpuData> _geoms = new();
 
         // Camera
-        public float CameraYaw      { get; set; } = MathF.PI * 0.25f;  // front-left 3/4 view
-        public float CameraPitch    { get; set; } = 0.35f;              // slight downward look
+        public float CameraYaw      { get; set; } = MathF.PI * 0.25f;
+        public float CameraPitch    { get; set; } = 0.35f;
         public float CameraDistance { get; set; } = 5.0f;
         public float PanX           { get; set; } = 0f;
         public float PanY           { get; set; } = 0f;
@@ -101,13 +98,10 @@ namespace ToolKitV.Models.Rendering
         {
             _imageSource = new DX11ImageSource();
 
-            // Create D3D11 device — no swap chain needed, we render into D3DImage
             _device = new Device(
-                SharpDX.Direct3D.DriverType.Hardware,
+                DriverType.Hardware,
                 DeviceCreationFlags.BgraSupport,
-                new[] { SharpDX.Direct3D.FeatureLevel.Level_11_0,
-                        SharpDX.Direct3D.FeatureLevel.Level_10_1,
-                        SharpDX.Direct3D.FeatureLevel.Level_10_0 });
+                new[] { FeatureLevel.Level_11_0, FeatureLevel.Level_10_1, FeatureLevel.Level_10_0 });
             _context = _device.ImmediateContext;
 
             InitPipeline();
@@ -115,12 +109,10 @@ namespace ToolKitV.Models.Rendering
 
         private void InitPipeline()
         {
-            // Constant buffer
             _cb = new Buffer(_device, Utilities.SizeOf<SceneConstants>(),
                 ResourceUsage.Default, BindFlags.ConstantBuffer,
                 CpuAccessFlags.None, ResourceOptionFlags.None, 0);
 
-            // Shaders
             string hlslPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                                            "Models", "Rendering", "DefaultShader.hlsl");
             string hlsl = File.ReadAllText(hlslPath);
@@ -133,8 +125,6 @@ namespace ToolKitV.Models.Rendering
             _vs = new VertexShader(_device, _vsBlob);
             _ps = new PixelShader(_device, psBlob);
 
-
-            // Sampler
             _sampler = new SamplerState(_device, new SamplerStateDescription
             {
                 Filter             = Filter.MinMagMipLinear,
@@ -146,19 +136,16 @@ namespace ToolKitV.Models.Rendering
                 MaximumLod         = float.MaxValue
             });
 
-            // Rasterizer — cull back (standard), we can flip if needed
             _rs = new RasterizerState(_device, new RasterizerStateDescription
             {
                 FillMode             = FillMode.Solid,
-                CullMode             = CullMode.None,   // None until we confirm winding
+                CullMode             = CullMode.None,
                 IsDepthClipEnabled   = true,
                 IsScissorEnabled     = false,
                 IsMultisampleEnabled = false
             });
         }
 
-        // -------------------------------------------------------------------------
-        // Resize render target
         // -------------------------------------------------------------------------
         public void Resize(int w, int h)
         {
@@ -179,7 +166,7 @@ namespace ToolKitV.Models.Rendering
                 SampleDescription = new SampleDescription(1, 0),
                 BindFlags         = BindFlags.RenderTarget | BindFlags.ShaderResource,
                 Usage             = ResourceUsage.Default,
-                OptionFlags       = ResourceOptionFlags.Shared  // Required for DX11ImageSource / D3DImage interop
+                OptionFlags       = ResourceOptionFlags.Shared
             });
 
             _rtv = new RenderTargetView(_device, _rtTex);
@@ -201,134 +188,144 @@ namespace ToolKitV.Models.Rendering
         }
 
         // -------------------------------------------------------------------------
-        // Load model — mirrors CodeWalker's RenderableGeometry.Load()
+        // Load drawable — extract per-geometry texture names from ShaderMapping
         // -------------------------------------------------------------------------
         public void LoadDrawable(DrawableBase drawable)
         {
             ClearGeometries();
             if (drawable == null) return;
 
-            // Camera framing — reset pan too
             if (drawable is Drawable d)
             {
-                _modelCenter = d.BoundingCenter;
-                _modelRadius = Math.Max(0.5f, d.BoundingSphereRadius);
+                _modelCenter   = d.BoundingCenter;
+                _modelRadius   = Math.Max(0.5f, d.BoundingSphereRadius);
                 CameraDistance = _modelRadius * 2.8f;
                 PanX = 0f;
                 PanY = 0f;
             }
 
-            // Walk all LOD levels — prioritise High
+            // Get the shader array so we can resolve texture names per geometry
+            var shaderItems = drawable.ShaderGroup?.Shaders?.data_items;
+
+            // Prioritise High LOD, fall back through others
             var models = drawable.DrawableModels?.High
                       ?? drawable.DrawableModels?.Med
                       ?? drawable.DrawableModels?.Low
                       ?? drawable.AllModels;
 
-            if (models == null)
-            {
-                System.Windows.MessageBox.Show("No models found in drawable (DrawableModels is null).", "Debug");
-                return;
-            }
-
-            var errors = new System.Text.StringBuilder();
-            int attempted = 0, loaded = 0;
+            if (models == null) return;
 
             foreach (var model in models)
             {
                 if (model?.Geometries == null) continue;
-                foreach (var geom in model.Geometries)
+
+                for (int gi = 0; gi < model.Geometries.Length; gi++)
                 {
-                    attempted++;
+                    var geom = model.Geometries[gi];
+                    if (geom == null) continue;
+
+                    // Resolve this geometry's diffuse texture name via ShaderMapping
+                    string? textureName = null;
+                    if (shaderItems != null && model.ShaderMapping != null && gi < model.ShaderMapping.Length)
+                    {
+                        int si = model.ShaderMapping[gi];
+                        if (si < shaderItems.Length)
+                        {
+                            var shader = shaderItems[si];
+                            textureName = GetDiffuseTextureName(shader);
+                        }
+                    }
+
+                    var vd = geom.VertexData;
+                    if (vd?.VertexBytes == null || vd.VertexBytes.Length == 0) continue;
+                    if (geom.IndexBuffer?.Indices == null) continue;
+
+                    var declTypes    = vd.Info?.Types ?? VertexDeclarationTypes.GTAV1;
+                    var layoutElements = GtaVertexLayout.GetLayoutForSimpleShader(vd.VertexType, declTypes);
+                    if (layoutElements == null || layoutElements.Length == 0) continue;
+
+                    InputLayout layout;
+                    try { layout = new InputLayout(_device, _vsBlob, layoutElements); }
+                    catch { continue; }
+
+                    var vbData = vd.VertexBytes;
+                    var vbDesc = new BufferDescription(
+                        vbData.Length, ResourceUsage.Default,
+                        BindFlags.VertexBuffer, CpuAccessFlags.None,
+                        ResourceOptionFlags.None, 0);
+
+                    Buffer vb;
                     try
                     {
-                        var vd = geom?.VertexData;
-                        if (vd == null) { errors.AppendLine($"Geom {attempted}: VertexData null"); continue; }
-                        if (vd.VertexBytes == null || vd.VertexBytes.Length == 0) { errors.AppendLine($"Geom {attempted}: VertexBytes empty (stride={vd.VertexStride})"); continue; }
-                        if (geom.IndexBuffer?.Indices == null) { errors.AppendLine($"Geom {attempted}: IndexBuffer null"); continue; }
-
-                        // Find the exact byte offset of POSITION, NORMAL, TEXCOORD0 in this vertex format
-                        var declTypes = vd.Info?.Types ?? VertexDeclarationTypes.GTAV1;
-                        var layoutElements = GtaVertexLayout.GetLayoutForSimpleShader(vd.VertexType, declTypes);
-                        if (layoutElements == null || layoutElements.Length == 0)
-                        { errors.AppendLine($"Geom {attempted}: No POSITION found in VertexType={vd.VertexType}"); continue; }
-
-
-                        InputLayout layout;
-                        try { layout = new InputLayout(_device, _vsBlob, layoutElements); }
-                        catch (Exception ex2) { errors.AppendLine($"Geom {attempted} InputLayout: {ex2.Message} (VertexType={vd.VertexType}, Elements={layoutElements.Length})"); continue; }
-
-                        // Upload raw bytes — structureByteStride MUST be 0 for a plain vertex buffer
-                        var vbData = vd.VertexBytes;
-                        var vbDesc = new BufferDescription(
-                            sizeInBytes:          vbData.Length,
-                            usage:                ResourceUsage.Default,
-                            bindFlags:            BindFlags.VertexBuffer,
-                            cpuAccessFlags:       CpuAccessFlags.None,
-                            optionFlags:          ResourceOptionFlags.None,
-                            structureByteStride:  0);   // <-- 0, NOT vd.VertexStride
-
-                        Buffer vb;
-                        try
-                        {
-                            using var vbStream = new DataStream(vbData.Length, true, true);
-                            vbStream.Write(vbData, 0, vbData.Length);
-                            vbStream.Position = 0;
-                            vb = new Buffer(_device, vbStream, vbDesc);
-                        }
-                        catch (Exception ex2) { layout.Dispose(); errors.AppendLine($"Geom {attempted} VB create: {ex2.Message}"); continue; }
-
-                        Buffer ib;
-                        try { ib = Buffer.Create(_device, BindFlags.IndexBuffer, geom.IndexBuffer.Indices); }
-                        catch (Exception ex2) { layout.Dispose(); vb.Dispose(); errors.AppendLine($"Geom {attempted} IB create: {ex2.Message}"); continue; }
-
-                        _geoms.Add(new GeometryGpuData
-                        {
-                            VertexBuffer = vb,
-                            IndexBuffer  = ib,
-                            Layout       = layout,
-                            VertexStride = vd.VertexStride,
-                            IndexCount   = geom.IndexBuffer.Indices.Length
-                        });
-                        loaded++;
+                        using var s = new DataStream(vbData.Length, true, true);
+                        s.Write(vbData, 0, vbData.Length);
+                        s.Position = 0;
+                        vb = new Buffer(_device, s, vbDesc);
                     }
-                    catch (Exception ex)
+                    catch { layout.Dispose(); continue; }
+
+                    Buffer ib;
+                    try { ib = Buffer.Create(_device, BindFlags.IndexBuffer, geom.IndexBuffer.Indices); }
+                    catch { layout.Dispose(); vb.Dispose(); continue; }
+
+                    _geoms.Add(new GeometryGpuData
                     {
-                        errors.AppendLine($"Geom {attempted} unexpected: {ex.GetType().Name}: {ex.Message}");
-                    }
-
+                        VertexBuffer = vb,
+                        IndexBuffer  = ib,
+                        Layout       = layout,
+                        VertexStride = vd.VertexStride,
+                        IndexCount   = geom.IndexBuffer.Indices.Length,
+                        TextureName  = textureName
+                    });
                 }
             }
 
-            // Only show popup if there were failures
-            if (errors.Length > 0 && loaded == 0)
-                System.Windows.MessageBox.Show($"Failed to load any geometry.\n\n{errors}", "Renderer Error");
-
-            // Try to use embedded textures from ShaderGroup
+            // Load textures embedded in the drawable's own ShaderGroup TXD
             TryLoadEmbeddedTextures(drawable);
 
             Render();
         }
 
+        /// <summary>
+        /// Returns the diffuse texture name from a shader's parameter list.
+        /// GTA V shaders: first DataType==0 param is always the diffuse sampler.
+        /// </summary>
+        private static string? GetDiffuseTextureName(ShaderFX shader)
+        {
+            var plist = shader?.ParametersList;
+            if (plist?.Parameters == null) return null;
+
+            foreach (var p in plist.Parameters)
+            {
+                if (p.DataType == 0 && p.Data is Texture tex)
+                    return tex.Name;
+            }
+            return null;
+        }
+
         private void TryLoadEmbeddedTextures(DrawableBase drawable)
         {
-            if (_diffuseSrv != null) return; // already have an external texture
-
             var txd = (drawable as Drawable)?.ShaderGroup?.TextureDictionary;
             if (txd?.Textures?.data_items == null) return;
-
-            var tex = txd.Textures.data_items.FirstOrDefault();
-            if (tex != null) LoadTexture(tex);
+            foreach (var tex in txd.Textures.data_items)
+                LoadTextureToCacheOnly(tex);
         }
 
         // -------------------------------------------------------------------------
-        // Load YTD texture — fixed mip pitch calculation
+        // Public: load all textures from an external YTD into the cache.
+        // Call this for every texture in the YTD — they'll be keyed by name and
+        // matched per-geometry at render time via TextureName.
         // -------------------------------------------------------------------------
-        public void LoadTexture(CodeWalker.GameFiles.Texture cwTex)
+        public void LoadTexture(Texture cwTex)
+        {
+            LoadTextureToCacheOnly(cwTex);
+            Render(); // update display immediately
+        }
+
+        private void LoadTextureToCacheOnly(Texture? cwTex)
         {
             if (cwTex?.Data?.FullData == null || cwTex.Width <= 0 || cwTex.Height <= 0) return;
-
-            string texName = cwTex.Name ?? $"tex_{_textures.Count}";
-
+            if (string.IsNullOrEmpty(cwTex.Name)) return;
 
             Format fmt = cwTex.Format switch
             {
@@ -344,14 +341,17 @@ namespace ToolKitV.Models.Rendering
             };
             if (fmt == Format.Unknown) return;
 
-            bool isBC = fmt >= Format.BC1_Typeless && fmt <= Format.BC7_UNorm_SRgb;
+            bool isBC  = fmt >= Format.BC1_Typeless && fmt <= Format.BC7_UNorm_SRgb;
+            var  bytes = cwTex.Data.FullData;
+            int  levels = Math.Max(1, (int)cwTex.Levels);
 
+            // Pin ONCE — must stay pinned until AFTER new Texture2D() returns
+            var pinned = GCHandle.Alloc(bytes, GCHandleType.Pinned);
             try
             {
-                int levels = Math.Max(1, (int)cwTex.Levels);
-                var rects = new DataRectangle[levels];
-                int offset = 0;
-                var bytes = cwTex.Data.FullData;
+                IntPtr basePtr = pinned.AddrOfPinnedObject();
+                var    rects   = new List<DataRectangle>(levels);
+                int    offset  = 0;
 
                 for (int i = 0; i < levels; i++)
                 {
@@ -362,10 +362,8 @@ namespace ToolKitV.Models.Rendering
                     if (isBC)
                     {
                         int blockSize = (fmt == Format.BC1_UNorm || fmt == Format.BC4_UNorm) ? 8 : 16;
-                        int bw = Math.Max(1, (int)((mw + 3) / 4));
-                        int bh = Math.Max(1, (int)((mh + 3) / 4));
-                        rowPitch   = bw * blockSize;
-                        slicePitch = rowPitch * bh;
+                        rowPitch   = Math.Max(1, (mw + 3) / 4) * blockSize;
+                        slicePitch = rowPitch * Math.Max(1, (mh + 3) / 4);
                     }
                     else
                     {
@@ -374,19 +372,17 @@ namespace ToolKitV.Models.Rendering
                     }
 
                     if (offset + slicePitch > bytes.Length) break;
-
-                    var pinned = GCHandle.Alloc(bytes, GCHandleType.Pinned);
-                    rects[i] = new DataRectangle(pinned.AddrOfPinnedObject() + offset, rowPitch);
-                    pinned.Free();
-
+                    rects.Add(new DataRectangle(basePtr + offset, rowPitch));
                     offset += slicePitch;
                 }
+
+                if (rects.Count == 0) return;
 
                 var texDesc = new Texture2DDescription
                 {
                     Width             = cwTex.Width,
                     Height            = cwTex.Height,
-                    MipLevels         = levels,
+                    MipLevels         = rects.Count,
                     ArraySize         = 1,
                     Format            = fmt,
                     SampleDescription = new SampleDescription(1, 0),
@@ -394,43 +390,44 @@ namespace ToolKitV.Models.Rendering
                     BindFlags         = BindFlags.ShaderResource
                 };
 
-                using var tex2d = new Texture2D(_device, texDesc, rects);
+                // D3D11 reads from pinned memory synchronously here
+                using var tex2d = new Texture2D(_device, texDesc, rects.ToArray());
                 var srv = new ShaderResourceView(_device, tex2d);
 
-                // Dispose old entry for this name if replacing
-                if (_textures.TryGetValue(texName, out var old)) old.Dispose();
-                _textures[texName] = srv;
-
-                // First texture always becomes the active diffuse
-                if (_diffuseSrv == null) _diffuseSrv = srv;
+                if (_textures.TryGetValue(cwTex.Name, out var old)) old.Dispose();
+                _textures[cwTex.Name] = srv;
             }
-            catch { /* silently skip bad textures */ }
+            catch { /* skip unreadable mip data */ }
+            finally
+            {
+                pinned.Free(); // safe — Texture2D already constructed above
+            }
         }
 
-
         // -------------------------------------------------------------------------
-        // Render
+        // Render loop
         // -------------------------------------------------------------------------
         public void Render()
         {
             if (_rtv == null || _dsv == null) return;
 
             _context.ClearRenderTargetView(_rtv, new Color4(0.08f, 0.09f, 0.11f, 1f));
-            _context.ClearDepthStencilView(_dsv, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1f, 0);
+            _context.ClearDepthStencilView(_dsv,
+                DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1f, 0);
 
             if (_geoms.Count == 0 || _rtTex == null) goto Flush;
 
-            // Build camera: orbit around modelCenter + pan offset
+            // Camera — orbit + pan
             float aspect = (float)_rtTex.Description.Width / _rtTex.Description.Height;
             float cy = MathF.Cos(CameraYaw),   sy = MathF.Sin(CameraYaw);
             float cp = MathF.Cos(CameraPitch),  sp = MathF.Sin(CameraPitch);
 
-            var forward  = new Vector3(sy * cp, sp, cy * cp);
-            var right    = Vector3.Normalize(Vector3.Cross(Vector3.Up, forward));
-            var up       = Vector3.Normalize(Vector3.Cross(forward, right));
+            var forward = new Vector3(sy * cp, sp, cy * cp);
+            var right   = Vector3.Normalize(Vector3.Cross(Vector3.Up, forward));
+            var up      = Vector3.Normalize(Vector3.Cross(forward, right));
 
-            var target  = _modelCenter + right * PanX + up * PanY;
-            var camPos  = target + forward * CameraDistance;
+            var target = _modelCenter + right * PanX + up * PanY;
+            var camPos = target + forward * CameraDistance;
 
             var view = Matrix.LookAtLH(camPos, target, Vector3.Up);
             var proj = Matrix.PerspectiveFovLH(MathF.PI / 4f, aspect, 0.01f, _modelRadius * 500f);
@@ -438,22 +435,20 @@ namespace ToolKitV.Models.Rendering
             var wvp = view * proj;
             Matrix.Transpose(ref wvp, out wvp);
 
-            // Three-point lighting — key from upper-right, fill from left, strong ambient
+            // Set constant buffer — HasTexture is set per-draw-call below
             var sc = new SceneConstants
             {
                 WorldViewProj = wvp,
-                LightDir      = Vector3.Normalize(new Vector3(-0.6f, -1f, 0.5f)), // key light
-                HasTexture    = _diffuseSrv != null ? 1f : 0f,
-                Ambient       = new Vector4(0.55f, 0.55f, 0.58f, 1f)  // bright ambient
+                LightDir      = Vector3.Normalize(new Vector3(-0.6f, -1f, 0.5f)),
+                HasTexture    = 0f,
+                Ambient       = new Vector4(0.55f, 0.55f, 0.58f, 1f)
             };
             _context.UpdateSubresource(ref sc, _cb);
 
-            // --- Set common state ---
             _context.VertexShader.Set(_vs);
             _context.VertexShader.SetConstantBuffer(0, _cb);
             _context.PixelShader.Set(_ps);
             _context.PixelShader.SetConstantBuffer(0, _cb);
-            _context.PixelShader.SetShaderResource(0, _diffuseSrv);
             _context.PixelShader.SetSampler(0, _sampler);
             _context.Rasterizer.State = _rs;
             _context.Rasterizer.SetViewport(new Viewport(0, 0,
@@ -461,10 +456,20 @@ namespace ToolKitV.Models.Rendering
             _context.OutputMerger.SetTargets(_dsv, _rtv);
             _context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
 
-            // --- Draw each geometry with its own InputLayout ---
             foreach (var g in _geoms)
             {
                 if (g.Layout == null || g.VertexBuffer == null || g.IndexBuffer == null) continue;
+
+                // Per-geometry texture: look up by name, fall back to null
+                ShaderResourceView? srv = null;
+                if (g.TextureName != null)
+                    _textures.TryGetValue(g.TextureName, out srv);
+
+                // Update HasTexture flag and bind SRV
+                sc.HasTexture = srv != null ? 1f : 0f;
+                _context.UpdateSubresource(ref sc, _cb);
+                _context.PixelShader.SetShaderResource(0, srv);
+
                 _context.InputAssembler.InputLayout = g.Layout;
                 _context.InputAssembler.SetVertexBuffers(0,
                     new VertexBufferBinding(g.VertexBuffer, g.VertexStride, 0));
@@ -477,7 +482,6 @@ namespace ToolKitV.Models.Rendering
             _imageSource.Invalidate();
         }
 
-        // -------------------------------------------------------------------------
         private void ClearGeometries()
         {
             foreach (var g in _geoms) g.Dispose();
@@ -487,7 +491,8 @@ namespace ToolKitV.Models.Rendering
         public void Dispose()
         {
             ClearGeometries();
-            _diffuseSrv?.Dispose();
+            foreach (var srv in _textures.Values) srv.Dispose();
+            _textures.Clear();
             _sampler.Dispose();
             _rs.Dispose();
             _cb.Dispose();
