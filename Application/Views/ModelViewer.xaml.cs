@@ -35,19 +35,25 @@ namespace ToolKitV.Views
 
                     if (ytd.TextureDict?.Textures?.data_items != null && ytd.TextureDict.Textures.data_items.Length > 0)
                     {
-                        // For the prototype, we apply the first texture found in the dictionary
-                        Viewport3D.LoadTexture(ytd.TextureDict.Textures.data_items[0]);
+                        // Load ALL textures from the dict so the renderer can bind the right one
+                        foreach (var tex in ytd.TextureDict.Textures.data_items)
+                        {
+                            Viewport3D.LoadTexture(tex);
+                        }
                     }
                     else
                     {
-                        MessageBox.Show("Could not find any textures in this YTD.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        MessageBox.Show("Could not find any textures in this YTD.", "Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }
                 catch (System.Exception ex)
                 {
-                    MessageBox.Show($"Failed to load YTD: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show($"Failed to load YTD: {ex.Message}", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
+
         }
 
         private void LoadModelBtn_Click(object sender, RoutedEventArgs e)

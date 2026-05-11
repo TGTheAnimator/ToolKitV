@@ -16,6 +16,7 @@ namespace ToolKitV.Views
 
         private Point _lastMousePos;
         private bool _isDragging = false;
+        private bool _isPanning  = false;
 
         // FPS calculation
         private Stopwatch _fpsStopwatch = new Stopwatch();
@@ -117,26 +118,52 @@ namespace ToolKitV.Views
         {
             base.OnMouseLeftButtonUp(e);
             _isDragging = false;
-            ReleaseMouseCapture();
+            if (!_isPanning) ReleaseMouseCapture();
+        }
+
+        protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
+        {
+            base.OnMouseRightButtonDown(e);
+            _isPanning = true;
+            _lastMousePos = e.GetPosition(this);
+            CaptureMouse();
+        }
+
+        protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
+        {
+            base.OnMouseRightButtonUp(e);
+            _isPanning = false;
+            if (!_isDragging) ReleaseMouseCapture();
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if (_isDragging && _renderer != null)
+            if (_renderer == null) return;
+
+            var pos = e.GetPosition(this);
+            float dx = (float)(pos.X - _lastMousePos.X);
+            float dy = (float)(pos.Y - _lastMousePos.Y);
+
+            if (_isDragging)
             {
-                var pos = e.GetPosition(this);
-                var dx = pos.X - _lastMousePos.X;
-                var dy = pos.Y - _lastMousePos.Y;
-
-                _renderer.CameraYaw += (float)(dx * 0.01);
-                _renderer.CameraPitch += (float)(dy * 0.01);
-                
-                // Clamp pitch to avoid gimbal lock
-                _renderer.CameraPitch = Math.Max((float)-Math.PI / 2.1f, Math.Min((float)Math.PI / 2.1f, _renderer.CameraPitch));
-
-                _lastMousePos = pos;
+                // Orbit — sensitivity scales down so large models don't spin too fast
+                float sens = 0.005f;
+                _renderer.CameraYaw   += dx * sens;
+                _renderer.CameraPitch += dy * sens;
+                _renderer.CameraPitch = Math.Clamp(_renderer.CameraPitch,
+                    -(float)Math.PI / 2.1f, (float)Math.PI / 2.1f);
             }
+
+            if (_isPanning)
+            {
+                // Pan — scale by model radius so panning feels consistent across model sizes
+                float panScale = _renderer.CameraDistance * 0.001f;
+                _renderer.PanX -= dx * panScale;
+                _renderer.PanY += dy * panScale;
+            }
+
+            _lastMousePos = pos;
         }
 
         protected override void OnMouseWheel(MouseWheelEventArgs e)
@@ -144,8 +171,9 @@ namespace ToolKitV.Views
             base.OnMouseWheel(e);
             if (_renderer != null)
             {
-                _renderer.CameraDistance -= (float)(e.Delta * 0.01);
-                _renderer.CameraDistance = Math.Max(0.5f, _renderer.CameraDistance);
+                // Zoom proportional to current distance — feels smooth near and far
+                float zoomFactor = 1f - (e.Delta / 1200f);
+                _renderer.CameraDistance = Math.Max(0.1f, _renderer.CameraDistance * zoomFactor);
             }
         }
 

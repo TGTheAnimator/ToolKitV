@@ -77,11 +77,12 @@ namespace ToolKitV.Models.Rendering
         private Buffer         _cb;
         private SamplerState   _sampler;
         private RasterizerState _rs;
-        private byte[]?        _vsBlob; // kept for per-geom InputLayout creation
+        private byte[]?        _vsBlob;
 
+        // Texture cache — name → SRV, supports multiple YTD textures
+        private readonly Dictionary<string, ShaderResourceView> _textures = new(StringComparer.OrdinalIgnoreCase);
+        private ShaderResourceView? _diffuseSrv; // currently active texture
 
-        // Texture
-        private ShaderResourceView? _diffuseSrv;
 
         // Model
         private readonly List<GeometryGpuData> _geoms = new();
@@ -90,6 +91,8 @@ namespace ToolKitV.Models.Rendering
         public float CameraYaw      { get; set; } = MathF.PI * 0.25f;  // front-left 3/4 view
         public float CameraPitch    { get; set; } = 0.35f;              // slight downward look
         public float CameraDistance { get; set; } = 5.0f;
+        public float PanX           { get; set; } = 0f;
+        public float PanY           { get; set; } = 0f;
         private Vector3 _modelCenter = Vector3.Zero;
         private float   _modelRadius = 1.0f;
 
@@ -205,12 +208,14 @@ namespace ToolKitV.Models.Rendering
             ClearGeometries();
             if (drawable == null) return;
 
-            // Camera framing
+            // Camera framing — reset pan too
             if (drawable is Drawable d)
             {
                 _modelCenter = d.BoundingCenter;
                 _modelRadius = Math.Max(0.5f, d.BoundingSphereRadius);
                 CameraDistance = _modelRadius * 2.8f;
+                PanX = 0f;
+                PanY = 0f;
             }
 
             // Walk all LOD levels — prioritise High
@@ -320,10 +325,10 @@ namespace ToolKitV.Models.Rendering
         // -------------------------------------------------------------------------
         public void LoadTexture(CodeWalker.GameFiles.Texture cwTex)
         {
-            _diffuseSrv?.Dispose();
-            _diffuseSrv = null;
-
             if (cwTex?.Data?.FullData == null || cwTex.Width <= 0 || cwTex.Height <= 0) return;
+
+            string texName = cwTex.Name ?? $"tex_{_textures.Count}";
+
 
             Format fmt = cwTex.Format switch
             {
@@ -390,10 +395,18 @@ namespace ToolKitV.Models.Rendering
                 };
 
                 using var tex2d = new Texture2D(_device, texDesc, rects);
-                _diffuseSrv = new ShaderResourceView(_device, tex2d);
+                var srv = new ShaderResourceView(_device, tex2d);
+
+                // Dispose old entry for this name if replacing
+                if (_textures.TryGetValue(texName, out var old)) old.Dispose();
+                _textures[texName] = srv;
+
+                // First texture always becomes the active diffuse
+                if (_diffuseSrv == null) _diffuseSrv = srv;
             }
             catch { /* silently skip bad textures */ }
         }
+
 
         // -------------------------------------------------------------------------
         // Render
@@ -407,28 +420,31 @@ namespace ToolKitV.Models.Rendering
 
             if (_geoms.Count == 0 || _rtTex == null) goto Flush;
 
-            // --- Build camera matrices ---
+            // Build camera: orbit around modelCenter + pan offset
             float aspect = (float)_rtTex.Description.Width / _rtTex.Description.Height;
-            float cy = MathF.Cos(CameraYaw), sy = MathF.Sin(CameraYaw);
-            float cp = MathF.Cos(CameraPitch), sp = MathF.Sin(CameraPitch);
+            float cy = MathF.Cos(CameraYaw),   sy = MathF.Sin(CameraYaw);
+            float cp = MathF.Cos(CameraPitch),  sp = MathF.Sin(CameraPitch);
 
-            var camPos = _modelCenter + new Vector3(
-                CameraDistance * sy * cp,
-                CameraDistance * sp,
-                CameraDistance * cy * cp);
+            var forward  = new Vector3(sy * cp, sp, cy * cp);
+            var right    = Vector3.Normalize(Vector3.Cross(Vector3.Up, forward));
+            var up       = Vector3.Normalize(Vector3.Cross(forward, right));
 
-            var view = Matrix.LookAtLH(camPos, _modelCenter, Vector3.Up);
+            var target  = _modelCenter + right * PanX + up * PanY;
+            var camPos  = target + forward * CameraDistance;
+
+            var view = Matrix.LookAtLH(camPos, target, Vector3.Up);
             var proj = Matrix.PerspectiveFovLH(MathF.PI / 4f, aspect, 0.01f, _modelRadius * 500f);
 
             var wvp = view * proj;
-            Matrix.Transpose(ref wvp, out wvp); // HLSL expects column-major
+            Matrix.Transpose(ref wvp, out wvp);
 
+            // Three-point lighting — key from upper-right, fill from left, strong ambient
             var sc = new SceneConstants
             {
                 WorldViewProj = wvp,
-                LightDir      = Vector3.Normalize(new Vector3(0.5f, -1f, 0.7f)),
+                LightDir      = Vector3.Normalize(new Vector3(-0.6f, -1f, 0.5f)), // key light
                 HasTexture    = _diffuseSrv != null ? 1f : 0f,
-                Ambient       = new Vector4(0.25f, 0.25f, 0.25f, 1f)
+                Ambient       = new Vector4(0.55f, 0.55f, 0.58f, 1f)  // bright ambient
             };
             _context.UpdateSubresource(ref sc, _cb);
 

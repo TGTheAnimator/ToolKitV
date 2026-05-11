@@ -1,6 +1,5 @@
 // TGToolKit — DefaultShader.hlsl
-// VS_IN declares ONLY what the shader reads.
-// This ensures the compiled input signature matches our InputLayout exactly.
+// Minimal VS_IN matching the 3 semantics our InputLayout provides.
 
 cbuffer SceneConstants : register(b0)
 {
@@ -15,9 +14,9 @@ SamplerState LinearSampler  : register(s0);
 
 struct VS_IN
 {
-    float3 Position : POSITION;   // always present in GTA V verts
-    float4 Normal   : NORMAL;     // float4 handles both Float3 and R8G8B8A8_SNorm
-    float2 TexCoord : TEXCOORD;   // TEXCOORD semantic index 0
+    float3 Position : POSITION;
+    float4 Normal   : NORMAL;     // float4 handles R8G8B8A8_SNorm and Float3
+    float2 TexCoord : TEXCOORD;
 };
 
 struct PS_IN
@@ -38,13 +37,23 @@ PS_IN VS(VS_IN input)
 
 float4 PS(PS_IN input) : SV_Target
 {
-    float3 n     = normalize(input.norm);
-    float  NdotL = saturate(dot(n, -normalize(LightDir)));
-    float  light = NdotL * 0.8f + 0.2f;
+    float3 n = normalize(input.norm);
+
+    // Key light (warm, from upper-front-right)
+    float3 keyDir   = normalize(float3(-0.6f, -1.0f, 0.5f));
+    float  key      = saturate(dot(n, -keyDir)) * 0.75f;
+
+    // Fill light (cool, from left) — softens shadows
+    float3 fillDir  = normalize(float3(1.0f, -0.3f, -0.5f));
+    float  fill     = saturate(dot(n, -fillDir)) * 0.25f;
+
+    float  light    = key + fill + 0.15f;  // 0.15 ambient floor
 
     float4 albedo = (HasTexture > 0.5f)
         ? DiffuseTexture.Sample(LinearSampler, input.tex)
-        : float4(0.72f, 0.72f, 0.72f, 1.0f);
+        : float4(0.78f, 0.78f, 0.78f, 1.0f);
 
-    return float4(albedo.rgb * light + Ambient.rgb * 0.15f, albedo.a);
+    // Apply lighting + global ambient tint
+    float3 lit = albedo.rgb * light + Ambient.rgb * 0.2f;
+    return float4(saturate(lit), albedo.a);
 }
