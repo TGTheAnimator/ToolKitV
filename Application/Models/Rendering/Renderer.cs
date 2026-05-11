@@ -79,6 +79,7 @@ namespace ToolKitV.Models.Rendering
         private RasterizerState _rs;
         private byte[]?        _vsBlob; // kept for per-geom InputLayout creation
 
+
         // Texture
         private ShaderResourceView? _diffuseSrv;
 
@@ -86,8 +87,8 @@ namespace ToolKitV.Models.Rendering
         private readonly List<GeometryGpuData> _geoms = new();
 
         // Camera
-        public float CameraYaw      { get; set; } = 0.8f;
-        public float CameraPitch    { get; set; } = 0.4f;
+        public float CameraYaw      { get; set; } = MathF.PI * 0.25f;  // front-left 3/4 view
+        public float CameraPitch    { get; set; } = 0.35f;              // slight downward look
         public float CameraDistance { get; set; } = 5.0f;
         private Vector3 _modelCenter = Vector3.Zero;
         private float   _modelRadius = 1.0f;
@@ -128,6 +129,7 @@ namespace ToolKitV.Models.Rendering
 
             _vs = new VertexShader(_device, _vsBlob);
             _ps = new PixelShader(_device, psBlob);
+
 
             // Sampler
             _sampler = new SamplerState(_device, new SamplerStateDescription
@@ -217,50 +219,84 @@ namespace ToolKitV.Models.Rendering
                       ?? drawable.DrawableModels?.Low
                       ?? drawable.AllModels;
 
-            if (models == null) return;
+            if (models == null)
+            {
+                System.Windows.MessageBox.Show("No models found in drawable (DrawableModels is null).", "Debug");
+                return;
+            }
+
+            var errors = new System.Text.StringBuilder();
+            int attempted = 0, loaded = 0;
 
             foreach (var model in models)
             {
                 if (model?.Geometries == null) continue;
                 foreach (var geom in model.Geometries)
                 {
-                    if (geom?.VertexData == null || geom.IndexBuffer?.Indices == null) continue;
-
-                    var vd = geom.VertexData;
-                    if (vd.VertexBytes == null || vd.VertexBytes.Length == 0) continue;
-
-                    // --- CRITICAL: build InputLayout from geometry's own VertexType flags ---
-                    var layoutElements = GtaVertexLayout.GetLayout(vd.VertexType, vd.Info.Types);
-                    if (layoutElements.Length == 0) continue;
-
-                    InputLayout? layout = null;
+                    attempted++;
                     try
                     {
-                        layout = new InputLayout(_device, _vsBlob, layoutElements);
+                        var vd = geom?.VertexData;
+                        if (vd == null) { errors.AppendLine($"Geom {attempted}: VertexData null"); continue; }
+                        if (vd.VertexBytes == null || vd.VertexBytes.Length == 0) { errors.AppendLine($"Geom {attempted}: VertexBytes empty (stride={vd.VertexStride})"); continue; }
+                        if (geom.IndexBuffer?.Indices == null) { errors.AppendLine($"Geom {attempted}: IndexBuffer null"); continue; }
+
+                        // Find the exact byte offset of POSITION, NORMAL, TEXCOORD0 in this vertex format
+                        var declTypes = vd.Info?.Types ?? VertexDeclarationTypes.GTAV1;
+                        var layoutElements = GtaVertexLayout.GetLayoutForSimpleShader(vd.VertexType, declTypes);
+                        if (layoutElements == null || layoutElements.Length == 0)
+                        { errors.AppendLine($"Geom {attempted}: No POSITION found in VertexType={vd.VertexType}"); continue; }
+
+
+                        InputLayout layout;
+                        try { layout = new InputLayout(_device, _vsBlob, layoutElements); }
+                        catch (Exception ex2) { errors.AppendLine($"Geom {attempted} InputLayout: {ex2.Message} (VertexType={vd.VertexType}, Elements={layoutElements.Length})"); continue; }
+
+                        // Upload raw bytes — structureByteStride MUST be 0 for a plain vertex buffer
+                        var vbData = vd.VertexBytes;
+                        var vbDesc = new BufferDescription(
+                            sizeInBytes:          vbData.Length,
+                            usage:                ResourceUsage.Default,
+                            bindFlags:            BindFlags.VertexBuffer,
+                            cpuAccessFlags:       CpuAccessFlags.None,
+                            optionFlags:          ResourceOptionFlags.None,
+                            structureByteStride:  0);   // <-- 0, NOT vd.VertexStride
+
+                        Buffer vb;
+                        try
+                        {
+                            using var vbStream = new DataStream(vbData.Length, true, true);
+                            vbStream.Write(vbData, 0, vbData.Length);
+                            vbStream.Position = 0;
+                            vb = new Buffer(_device, vbStream, vbDesc);
+                        }
+                        catch (Exception ex2) { layout.Dispose(); errors.AppendLine($"Geom {attempted} VB create: {ex2.Message}"); continue; }
+
+                        Buffer ib;
+                        try { ib = Buffer.Create(_device, BindFlags.IndexBuffer, geom.IndexBuffer.Indices); }
+                        catch (Exception ex2) { layout.Dispose(); vb.Dispose(); errors.AppendLine($"Geom {attempted} IB create: {ex2.Message}"); continue; }
+
+                        _geoms.Add(new GeometryGpuData
+                        {
+                            VertexBuffer = vb,
+                            IndexBuffer  = ib,
+                            Layout       = layout,
+                            VertexStride = vd.VertexStride,
+                            IndexCount   = geom.IndexBuffer.Indices.Length
+                        });
+                        loaded++;
                     }
-                    catch { continue; } // skip incompatible layouts
-
-                    // Upload raw bytes verbatim — exactly as CodeWalker does
-                    var vbData = vd.VertexBytes;
-                    var vbDesc = new BufferDescription(vbData.Length, ResourceUsage.Default,
-                        BindFlags.VertexBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, vd.VertexStride);
-                    using var vbStream = new DataStream(vbData.Length, true, true);
-                    vbStream.Write(vbData, 0, vbData.Length);
-                    vbStream.Position = 0;
-                    var vb = new Buffer(_device, vbStream, vbDesc);
-
-                    var ib = Buffer.Create(_device, BindFlags.IndexBuffer, geom.IndexBuffer.Indices);
-
-                    _geoms.Add(new GeometryGpuData
+                    catch (Exception ex)
                     {
-                        VertexBuffer = vb,
-                        IndexBuffer  = ib,
-                        Layout       = layout,
-                        VertexStride = vd.VertexStride,
-                        IndexCount   = geom.IndexBuffer.Indices.Length
-                    });
+                        errors.AppendLine($"Geom {attempted} unexpected: {ex.GetType().Name}: {ex.Message}");
+                    }
+
                 }
             }
+
+            // Only show popup if there were failures
+            if (errors.Length > 0 && loaded == 0)
+                System.Windows.MessageBox.Show($"Failed to load any geometry.\n\n{errors}", "Renderer Error");
 
             // Try to use embedded textures from ShaderGroup
             TryLoadEmbeddedTextures(drawable);
@@ -384,9 +420,12 @@ namespace ToolKitV.Models.Rendering
             var view = Matrix.LookAtLH(camPos, _modelCenter, Vector3.Up);
             var proj = Matrix.PerspectiveFovLH(MathF.PI / 4f, aspect, 0.01f, _modelRadius * 500f);
 
+            var wvp = view * proj;
+            Matrix.Transpose(ref wvp, out wvp); // HLSL expects column-major
+
             var sc = new SceneConstants
             {
-                WorldViewProj = view * proj,
+                WorldViewProj = wvp,
                 LightDir      = Vector3.Normalize(new Vector3(0.5f, -1f, 0.7f)),
                 HasTexture    = _diffuseSrv != null ? 1f : 0f,
                 Ambient       = new Vector4(0.25f, 0.25f, 0.25f, 1f)
