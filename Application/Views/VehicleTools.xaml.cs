@@ -86,15 +86,12 @@ namespace ToolKitV.Views
 
             MergeResults counts = await Task.Run(() => ScanOnly(_resourcePath));
 
-            Dispatcher.Invoke(() =>
-            {
-                ScanVehiclesCount.Text   = counts.VehiclesFilesFound.ToString();
-                ScanHandlingCount.Text   = counts.HandlingFilesFound.ToString();
-                ScanCarcolsCount.Text    = counts.CarcolsFilesFound.ToString();
-                ScanVariationsCount.Text = counts.VariationsFilesFound.ToString();
-                ScanLayoutsCount.Text    = counts.LayoutsFilesFound.ToString();
-                ResultStatus.Text        = "Ready to merge";
-            });
+            ScanVehiclesCount.Text   = counts.VehiclesFilesFound.ToString();
+            ScanHandlingCount.Text   = counts.HandlingFilesFound.ToString();
+            ScanCarcolsCount.Text    = counts.CarcolsFilesFound.ToString();
+            ScanVariationsCount.Text = counts.VariationsFilesFound.ToString();
+            ScanLayoutsCount.Text    = counts.LayoutsFilesFound.ToString();
+            ResultStatus.Text        = "Ready to merge";
 
             ScanButton.Title = "Scan";
             SetBusy(false);
@@ -102,25 +99,19 @@ namespace ToolKitV.Views
 
         // ── Merge (full operation) ────────────────────────────────────────────
 
-        // Delegate types matching VehicleMetaMerger signature
-        public delegate void MergeProgress(MergeResults data, int progress);
-        private Delegate? _mergeProgressHandler;
-
-        public MergeProgress MergeProgressCallback => MergeProgressValue;
-
-        private void MergeProgressValue(MergeResults data, int progress)
+        private void MergeProgressValue((MergeResults data, int progress) report)
         {
-            Dispatcher.Invoke(() =>
-            {
-                MergeButton.SetProgress(progress);
-                ResultVehicles.Text   = data.VehiclesMerged   > 0 ? data.VehiclesMerged.ToString()   : "—";
-                ResultHandling.Text   = data.HandlingMerged   > 0 ? data.HandlingMerged.ToString()   : "—";
-                ResultKitsLights.Text = (data.KitsMerged + data.LightsMerged + data.SirenSettingsMerged) > 0
-                    ? $"{data.KitsMerged} / {data.LightsMerged} / {data.SirenSettingsMerged}" : "—";
-                ResultVariations.Text   = data.VariationsMerged   > 0 ? data.VariationsMerged.ToString()   : "—";
-                ResultConflicts.Text    = data.ConflictsResolved > 0 ? data.ConflictsResolved.ToString() : "0";
-                ResultDupes.Text        = data.DuplicatesSkipped > 0 ? data.DuplicatesSkipped.ToString() : "0";
-            });
+            var data = report.data;
+            var progress = report.progress;
+            
+            MergeButton.SetProgress(progress);
+            ResultVehicles.Text   = data.VehiclesMerged   > 0 ? data.VehiclesMerged.ToString()   : "—";
+            ResultHandling.Text   = data.HandlingMerged   > 0 ? data.HandlingMerged.ToString()   : "—";
+            ResultKitsLights.Text = (data.KitsMerged + data.LightsMerged + data.SirenSettingsMerged) > 0
+                ? $"{data.KitsMerged} / {data.LightsMerged} / {data.SirenSettingsMerged}" : "—";
+            ResultVariations.Text   = data.VariationsMerged   > 0 ? data.VariationsMerged.ToString()   : "—";
+            ResultConflicts.Text    = data.ConflictsResolved > 0 ? data.ConflictsResolved.ToString() : "0";
+            ResultDupes.Text        = data.DuplicatesSkipped > 0 ? data.DuplicatesSkipped.ToString() : "0";
         }
 
         private async void MergeButton_Click(object sender, RoutedEventArgs e)
@@ -144,31 +135,27 @@ namespace ToolKitV.Views
             ResultStatus.Text = "Running...";
             ResetResultsDisplay();
 
-            _mergeProgressHandler = MergeProgressCallback;
+            var progress = new Progress<(MergeResults, int)>(MergeProgressValue);
 
-            MergeResults result = await Task.Run(() =>
-                MergeVehicleMetas(_resourcePath, _backupPath, _cleanupSources, _mergeProgressHandler));
+            MergeResults result = await Task.Run(() => MergeVehicleMetas(_resourcePath, _backupPath, _cleanupSources, progress));
 
-            Dispatcher.Invoke(() =>
-            {
-                // Final counts
-                ScanVehiclesCount.Text   = result.VehiclesFilesFound.ToString();
-                ScanHandlingCount.Text   = result.HandlingFilesFound.ToString();
-                ScanCarcolsCount.Text    = result.CarcolsFilesFound.ToString();
-                ScanVariationsCount.Text = result.VariationsFilesFound.ToString();
-                ScanLayoutsCount.Text    = result.LayoutsFilesFound.ToString();
+            // Final counts
+            ScanVehiclesCount.Text   = result.VehiclesFilesFound.ToString();
+            ScanHandlingCount.Text   = result.HandlingFilesFound.ToString();
+            ScanCarcolsCount.Text    = result.CarcolsFilesFound.ToString();
+            ScanVariationsCount.Text = result.VariationsFilesFound.ToString();
+            ScanLayoutsCount.Text    = result.LayoutsFilesFound.ToString();
 
-                ResultVehicles.Text     = result.VehiclesMerged.ToString();
-                ResultHandling.Text     = result.HandlingMerged.ToString();
-                ResultKitsLights.Text   = $"{result.KitsMerged} / {result.LightsMerged} / {result.SirenSettingsMerged}";
-                ResultVariations.Text   = result.VariationsMerged.ToString();
-                ResultConflicts.Text    = result.ConflictsResolved.ToString();
-                ResultDupes.Text        = result.DuplicatesSkipped.ToString();
-                ResultStatus.Text       = "✓ Done";
+            ResultVehicles.Text     = result.VehiclesMerged.ToString();
+            ResultHandling.Text     = result.HandlingMerged.ToString();
+            ResultKitsLights.Text   = $"{result.KitsMerged} / {result.LightsMerged} / {result.SirenSettingsMerged}";
+            ResultVariations.Text   = result.VariationsMerged.ToString();
+            ResultConflicts.Text    = result.ConflictsResolved.ToString();
+            ResultDupes.Text        = result.DuplicatesSkipped.ToString();
+            ResultStatus.Text       = "✓ Done";
 
-                if (result.Warnings?.Count > 0)
-                    ResultConflicts.Foreground = System.Windows.Media.Brushes.OrangeRed;
-            });
+            if (result.Warnings?.Count > 0)
+                ResultConflicts.Foreground = System.Windows.Media.Brushes.OrangeRed;
 
             MergeButton.Title = "Merge";
             MergeButton.ResetProgress();
@@ -208,54 +195,45 @@ namespace ToolKitV.Views
             ScanModelsButton.Title = "Scanning Models...";
             ResetModelScanDisplay();
 
-            ModelScanner.ScanResults? results = null;
-
-            await Task.Run(() =>
+            var progress = new Progress<(int progress, int current, int total)>(report => 
             {
-                results = ModelScanner.ScanDirectory(_resourcePath, new Action<int, int, int>((progress, current, total) =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        ScanModelsButton.SetProgress(progress);
-                        ScanModelsButton.Title = $"Scanning {current}/{total}...";
-                    });
-                }));
+                ScanModelsButton.SetProgress(report.progress);
+                ScanModelsButton.Title = $"Scanning {report.current}/{report.total}...";
             });
+
+            ModelScanner.ScanResults results = await Task.Run(() => ModelScanner.ScanDirectory(_resourcePath, progress));
 
             if (results != null)
             {
-                Dispatcher.Invoke(() =>
-                {
-                    ModelScanTotal.Text = results.TotalFilesScanned.ToString();
-                    ModelScanSafe.Text = results.SafeFiles.ToString();
-                    ModelScanWarnings.Text = results.WarningFiles.ToString();
-                    ModelScanCritical.Text = results.CriticalFiles.ToString();
+                ModelScanTotal.Text = results.TotalFilesScanned.ToString();
+                ModelScanSafe.Text = results.SafeFiles.ToString();
+                ModelScanWarnings.Text = results.WarningFiles.ToString();
+                ModelScanCritical.Text = results.CriticalFiles.ToString();
 
-                    if (results.CriticalFiles > 0)
-                    {
-                        MessageBox.Show(
-                            $"Found {results.CriticalFiles} critical model(s) exceeding GTA V engine limits! These will cause the 'georgia-alaska-october' crash.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
-                            "TGToolKit — Critical Models Found",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error);
-                    }
-                    else if (results.WarningFiles > 0)
-                    {
-                        MessageBox.Show(
-                            $"Found {results.WarningFiles} heavy model(s). They might not crash the game but can cause instability or FPS drops.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
-                            "TGToolKit — Heavy Models Found",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Warning);
-                    }
-                    else if (results.TotalFilesScanned > 0)
-                    {
-                        MessageBox.Show(
-                            $"All {results.TotalFilesScanned} scanned models are within safe limits. Your server shouldn't crash from these geometries.",
-                            "TGToolKit — Scan Complete",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Information);
-                    }
-                });
+                if (results.CriticalFiles > 0)
+                {
+                    MessageBox.Show(
+                        $"Found {results.CriticalFiles} critical model(s) exceeding GTA V engine limits! These will cause the 'georgia-alaska-october' crash.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
+                        "TGToolKit — Critical Models Found",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+                else if (results.WarningFiles > 0)
+                {
+                    MessageBox.Show(
+                        $"Found {results.WarningFiles} heavy model(s). They might not crash the game but can cause instability or FPS drops.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
+                        "TGToolKit — Heavy Models Found",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                else if (results.TotalFilesScanned > 0)
+                {
+                    MessageBox.Show(
+                        $"All {results.TotalFilesScanned} scanned models are within safe limits. Your server shouldn't crash from these geometries.",
+                        "TGToolKit — Scan Complete",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
             }
 
             ScanModelsButton.Title = "Scan YFT Models";

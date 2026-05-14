@@ -55,7 +55,7 @@ namespace ToolKitV.Models
             public TimeSpan ScanDuration;
         }
 
-        public static ScanResults ScanDirectory(string directoryPath, Delegate progressHandler)
+        public static async Task<ScanResults> ScanDirectory(string directoryPath, IProgress<(int progress, int current, int total)> progressHandler)
         {
             var results = new ScanResults();
             var startTime = DateTime.Now;
@@ -88,7 +88,7 @@ namespace ToolKitV.Models
                 if (count % 10 == 0 || count == allFiles.Length)
                 {
                     int progress = (int)((double)count / allFiles.Length * 100);
-                    progressHandler?.DynamicInvoke(progress, count, allFiles.Length);
+                    progressHandler?.Report((progress, count, allFiles.Length));
                 }
             });
 

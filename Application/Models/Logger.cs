@@ -1,53 +1,60 @@
-﻿using System;
+using System;
 using System.IO;
-using System.Reflection;
+using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace ToolKitV.Models
 {
-    public class LogWriter
+    public class LogWriter : IAsyncDisposable
     {
-        private string m_exePath = string.Empty;
-        public LogWriter(string logMessage)
+        private readonly string m_logPath;
+        private readonly Channel<string> m_channel;
+        private readonly Task m_writerTask;
+
+        public LogWriter(string logMessage = "=== Log Initialized ===")
         {
-            InitLogFile();
+            m_logPath = Path.Combine(Directory.GetCurrentDirectory(), "log.txt");
+            
+            // Create an unbounded channel so your parallel loops never have to wait
+            m_channel = Channel.CreateUnbounded<string>();
+            
+            // Start the background writer task
+            m_writerTask = ProcessLogQueueAsync();
+            
             LogWrite(logMessage);
         }
 
-        private void InitLogFile()
-        {
-            m_exePath = Directory.GetCurrentDirectory();
-            try
-            {
-                using StreamWriter w = File.CreateText(m_exePath + "\\" + "log.txt");
-                Log("Init log file", w);
-            }
-            catch (Exception)
-            {
-            }
-        }
         public void LogWrite(string logMessage)
         {
+            // Format the message and push it to the memory queue instantly
+            string formattedMsg = $"{DateTime.Now.ToLongTimeString()} {DateTime.Now.ToLongDateString()} | {logMessage}";
+            m_channel.Writer.TryWrite(formattedMsg);
+        }
+
+        private async Task ProcessLogQueueAsync()
+        {
+            // Keep the file stream open and let the OS handle the buffering
             try
             {
-                using StreamWriter w = File.AppendText(m_exePath + "\\" + "log.txt");
-                Log(logMessage, w);
+                using StreamWriter writer = new StreamWriter(m_logPath, append: true) { AutoFlush = true };
+                
+                await foreach (string msg in m_channel.Reader.ReadAllAsync())
+                {
+                    await writer.WriteLineAsync(msg);
+                }
             }
             catch (Exception)
             {
+                // Failsafe: If the log file is totally locked by an external program, 
+                // the channel will just drain without crashing the main application.
             }
         }
 
-        public static void Log(string logMessage, TextWriter txtWriter)
+        // Call this when the app is closing to ensure the final logs are written
+        public async ValueTask DisposeAsync()
         {
-            try
-            {
-                txtWriter.Write("{0} {1} | ", DateTime.Now.ToLongTimeString(),
-                    DateTime.Now.ToLongDateString());
-                txtWriter.WriteLine("{0}", logMessage);
-            }
-            catch (Exception)
-            {
-            }
+            m_channel.Writer.Complete();
+            await m_writerTask;
         }
     }
 }

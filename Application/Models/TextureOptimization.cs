@@ -6,7 +6,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using ToolKitV.Models;
 
-namespace ToolkitV.Models
+namespace ToolKitV.Models
 {
     public partial class TextureOptimization
     {
@@ -366,7 +366,7 @@ namespace ToolkitV.Models
         /// <paramref name="optimizeSize"/> is the threshold (Width + Height in px) above
         /// which individual textures are reprocessed.
         /// </summary>
-        public static ResultsData Optimize(
+        public static async Task<ResultsData> Optimize(
             string   inputDirectory,
             string   backupDirectory,
             string   optimizeSize,
@@ -374,7 +374,7 @@ namespace ToolkitV.Models
             bool     downsize,
             bool     formatOptimization,
             bool     autoDownscale4K,
-            Delegate optimizeProgressHandler)
+            IProgress<(ResultsData results, int progress)> progressHandler)
         {
             ResultsData results = new();
 
@@ -383,7 +383,7 @@ namespace ToolkitV.Models
             bool     doBackup         = !string.IsNullOrEmpty(backupDirectory);
             int      currentProgress  = 0;
 
-            LogWriter log = new("=== TGToolKit optimisation started ===");
+            await using var log = new LogWriter("=== TGToolKit optimisation started ===");
 
             for (int i = 0; i < inputFiles.Length; i++)
             {
@@ -470,12 +470,12 @@ namespace ToolkitV.Models
                 int progress = i * 100 / inputFiles.Length;
                 if (currentProgress != progress)
                 {
-                    optimizeProgressHandler?.DynamicInvoke(results, progress);
+                    progressHandler?.Report((results, progress));
                     currentProgress = progress;
                 }
             }
 
-            optimizeProgressHandler?.DynamicInvoke(results, 100);
+            progressHandler?.Report((results, 100));
             log.LogWrite("=== TGToolKit optimisation finished ===");
             return results;
         }
@@ -492,17 +492,17 @@ namespace ToolkitV.Models
         /// The operation is completely independent of the Optimize settings — it always
         /// processes every YTD regardless of file size or the onlyOverSized toggle.
         /// </summary>
-        public static ScriptRtResultsData FixScriptRTs(
+        public static async Task<ScriptRtResultsData> FixScriptRTs(
             string   inputDirectory,
             string   backupDirectory,
-            Delegate progressHandler)
+            IProgress<(ScriptRtResultsData results, int progress)> progressHandler)
         {
             ScriptRtResultsData results  = new();
             string[] inputFiles          = Directory.GetFiles(inputDirectory, "*.ytd", SearchOption.AllDirectories);
             bool     doBackup            = !string.IsNullOrEmpty(backupDirectory);
             int      currentProgress     = 0;
 
-            LogWriter log = new("=== TGToolKit Script RT Fix started ===");
+            await using var log = new LogWriter("=== TGToolKit Script RT Fix started ===");
 
             for (int i = 0; i < inputFiles.Length; i++)
             {
@@ -554,12 +554,12 @@ namespace ToolkitV.Models
                 int progress = i * 100 / inputFiles.Length;
                 if (currentProgress != progress)
                 {
-                    progressHandler?.DynamicInvoke(results, progress);
+                    progressHandler?.Report((results, progress));
                     currentProgress = progress;
                 }
             }
 
-            progressHandler?.DynamicInvoke(results, 100);
+            progressHandler?.Report((results, 100));
             log.LogWrite("=== TGToolKit Script RT Fix finished ===");
             return results;
         }
@@ -570,7 +570,7 @@ namespace ToolkitV.Models
         /// Scans all .ytd files and returns aggregate stats.
         /// Oversized threshold is based on virtual size (GPU budget) per FiveM conventions.
         /// </summary>
-        public static StatsData GetStatsData(string path, Delegate? updateHandler)
+        public static async Task<StatsData> GetStatsData(string path, IProgress<int>? updateHandler)
         {
             StatsData results = new();
             string[] inputFiles = Directory.GetFiles(path, "*.ytd", SearchOption.AllDirectories);
@@ -595,12 +595,12 @@ namespace ToolkitV.Models
                 int progress = i * 100 / inputFiles.Length;
                 if (currentProgress != progress)
                 {
-                    updateHandler?.DynamicInvoke(progress);
+                    updateHandler?.Report(progress);
                     currentProgress = progress;
                 }
             }
 
-            updateHandler?.DynamicInvoke(100);
+            updateHandler?.Report(100);
             return results;
         }
 

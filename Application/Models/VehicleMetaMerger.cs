@@ -69,11 +69,11 @@ namespace ToolKitV.Models
         /// All original meta files are backed up to <paramref name="backupDirectory"/>
         /// (if non-empty) before any writes occur.
         /// </summary>
-        public static MergeResults MergeVehicleMetas(
+        public static async Task<MergeResults> MergeVehicleMetas(
             string   resourceDirectory,
             string   backupDirectory,
             bool     removeSourceFiles,
-            Delegate progressHandler)
+            IProgress<(MergeResults results, int progress)> progressHandler)
         {
             MergeResults results = new() { Warnings = new List<string>() };
 
@@ -86,7 +86,7 @@ namespace ToolKitV.Models
             results.VariationsFilesFound = discovered.GetValueOrDefault(VariationsMeta)?.Count ?? 0;
             results.LayoutsFilesFound    = discovered.GetValueOrDefault(LayoutsMeta)?.Count   ?? 0;
 
-            var log = new LogWriter("=== TGToolKit Vehicle Meta Merge started ===");
+            await using var log = new LogWriter("=== TGToolKit Vehicle Meta Merge started ===");
             log.LogWrite($"Resource directory: {resourceDirectory}");
             LogDiscovery(discovered, log);
 
@@ -101,7 +101,7 @@ namespace ToolKitV.Models
             if (!string.IsNullOrEmpty(backupDirectory))
                 BackupAll(discovered, resourceDirectory, backupDirectory, log);
 
-            progressHandler?.DynamicInvoke(results, 5);
+            progressHandler?.Report((results, 5));
 
             // 3 ── Merge each type (carcols first — produces the kit ID remapping
             //      that carvariations needs to correct its kit references)
@@ -135,7 +135,7 @@ namespace ToolKitV.Models
                     results.Warnings.Add($"Siren ID conflict in {Path.GetDirectoryName(c.SourceFile)}: ID {c.OldId} → {c.NewId}");
             }
 
-            progressHandler?.DynamicInvoke(results, 25);
+            progressHandler?.Report((results, 25));
 
             if (variationsFiles.Count > 0)
             {
@@ -145,7 +145,7 @@ namespace ToolKitV.Models
                 results.DuplicatesSkipped += dupes;
             }
 
-            progressHandler?.DynamicInvoke(results, 45);
+            progressHandler?.Report((results, 45));
 
             if (vehiclesFiles.Count > 0)
             {
@@ -156,7 +156,7 @@ namespace ToolKitV.Models
                 results.DuplicatesSkipped += dupes;
             }
 
-            progressHandler?.DynamicInvoke(results, 60);
+            progressHandler?.Report((results, 60));
 
             if (handlingFiles.Count > 0)
             {
@@ -166,7 +166,7 @@ namespace ToolKitV.Models
                 results.DuplicatesSkipped += dupes;
             }
 
-            progressHandler?.DynamicInvoke(results, 75);
+            progressHandler?.Report((results, 75));
 
             if (layoutsFiles.Count > 0)
             {
@@ -186,7 +186,7 @@ namespace ToolKitV.Models
             WriteMergedDoc(variationsDoc, Path.Combine(outputDataDir, VariationsMeta), log);
             WriteMergedDoc(layoutsDoc,    Path.Combine(outputDataDir, LayoutsMeta),    log);
 
-            progressHandler?.DynamicInvoke(results, 88);
+            progressHandler?.Report((results, 88));
 
             // 5 ── Generate fxmanifest snippet
             GenerateFxManifestSnippet(resourceDirectory, discovered, log);
@@ -198,7 +198,7 @@ namespace ToolKitV.Models
             if (removeSourceFiles)
                 RemoveSourceFiles(discovered, outputDataDir, log);
 
-            progressHandler?.DynamicInvoke(results, 100);
+            progressHandler?.Report((results, 100));
             log.LogWrite("=== TGToolKit Vehicle Meta Merge finished ===");
             return results;
         }

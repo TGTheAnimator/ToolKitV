@@ -47,63 +47,59 @@ namespace ToolKitV.Views
 
             AuditResult? result = null;
 
+            var progress = new Progress<(int progress, int current, int total)>(report => 
+            {
+                RunAuditButton.SetProgress(report.progress);
+                RunAuditButton.Title = $"Scanning {report.current}/{report.total}...";
+            });
+
             await Task.Run(() =>
             {
-                result = ResourceAudit.AuditResource(_resourcePath, (progress, current, total) =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        RunAuditButton.SetProgress(progress);
-                        RunAuditButton.Title = $"Scanning {current}/{total}...";
-                    });
-                });
+                result = ResourceAudit.AuditResource(_resourcePath, progress);
             });
 
             if (result != null)
             {
-                Dispatcher.Invoke(() =>
+                ResultStatus.Text = result.OverallStatus.ToString();
+                ResultStatus.Foreground = result.OverallStatus == DangerLevel.Critical ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x55, 0x55)) :
+                                            result.OverallStatus == DangerLevel.Warning ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xA5, 0x00)) :
+                                            new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xFF, 0x70));
+
+                ResultTotalMB.Text = $"{result.TotalEstimatedMB:F2} MB";
+                ResultTextureMB.Text = $"{result.TextureVirtualMB:F2} MB";
+                ResultModelMB.Text = $"{result.ModelVirtualMB:F2} MB";
+                ResultCollisionMB.Text = $"{result.CollisionVirtualMB:F2} MB";
+                ResultAudioMB.Text = $"{result.AudioDiskMB:F2} MB";
+
+                if (result.Recommendations.Count > 0)
                 {
-                    ResultStatus.Text = result.OverallStatus.ToString();
-                    ResultStatus.Foreground = result.OverallStatus == DangerLevel.Critical ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x55, 0x55)) :
-                                              result.OverallStatus == DangerLevel.Warning ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xA5, 0x00)) :
-                                              new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xFF, 0x70));
+                    RecommendationsList.ItemsSource = result.Recommendations;
+                    RecommendationsList.Visibility = Visibility.Visible;
+                    NoRecommendationsText.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    RecommendationsList.ItemsSource = null;
+                    RecommendationsList.Visibility = Visibility.Collapsed;
+                    NoRecommendationsText.Visibility = Visibility.Visible;
+                }
 
-                    ResultTotalMB.Text = $"{result.TotalEstimatedMB:F2} MB";
-                    ResultTextureMB.Text = $"{result.TextureVirtualMB:F2} MB";
-                    ResultModelMB.Text = $"{result.ModelVirtualMB:F2} MB";
-                    ResultCollisionMB.Text = $"{result.CollisionVirtualMB:F2} MB";
-                    ResultAudioMB.Text = $"{result.AudioDiskMB:F2} MB";
-
-                    if (result.Recommendations.Count > 0)
-                    {
-                        RecommendationsList.ItemsSource = result.Recommendations;
-                        RecommendationsList.Visibility = Visibility.Visible;
-                        NoRecommendationsText.Visibility = Visibility.Collapsed;
-                    }
-                    else
-                    {
-                        RecommendationsList.ItemsSource = null;
-                        RecommendationsList.Visibility = Visibility.Collapsed;
-                        NoRecommendationsText.Visibility = Visibility.Visible;
-                    }
-
-                    if (result.OverallStatus == DangerLevel.Critical)
-                    {
+                if (result.OverallStatus == DangerLevel.Critical)
+                {
+                    MessageBox.Show(
+                        "This resource is CRITICAL and likely exceeds streaming limits.\nCheck the report in the folder for details.",
+                        "TGToolKit — Critical Audit Result",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+                else
+                {
                         MessageBox.Show(
-                            "This resource is CRITICAL and likely exceeds streaming limits.\nCheck the report in the folder for details.",
-                            "TGToolKit — Critical Audit Result",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error);
-                    }
-                    else
-                    {
-                         MessageBox.Show(
-                            "Audit Complete!\nCheck 'resource_audit_report.txt' in the folder for details.",
-                            "TGToolKit — Audit Complete",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Information);
-                    }
-                });
+                        "Audit Complete!\nCheck 'resource_audit_report.txt' in the folder for details.",
+                        "TGToolKit — Audit Complete",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
             }
 
             RunAuditButton.Title = "Run Asset Audit";

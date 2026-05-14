@@ -50,7 +50,7 @@ namespace ToolKitV.Models
 
     public static class ResourceAudit
     {
-        public static AuditResult AuditResource(string resourcePath, Action<int, int, int>? progressHandler = null)
+        public static AuditResult AuditResource(string resourcePath, IProgress<(int progress, int current, int total)>? progressHandler = null)
         {
             var result = new AuditResult
             {
@@ -65,7 +65,7 @@ namespace ToolKitV.Models
             foreach (var file in allFiles)
             {
                 current++;
-                progressHandler?.Invoke((int)((current / (float)total) * 100), current, total);
+                progressHandler?.Report(((int)((current / (float)total) * 100), current, total));
 
                 var ext = Path.GetExtension(file).ToLowerInvariant();
                 var entry = new FileAuditEntry

@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using static ToolkitV.Models.TextureOptimization;
+using static ToolKitV.Models.TextureOptimization;
 
 namespace ToolKitV.Views
 {
@@ -21,9 +21,6 @@ namespace ToolKitV.Views
         public TextureOptimization()
         {
             InitializeComponent();
-
-            AnalyzeProgressHandler  = AnalyzeProgressValue;
-            OptimizeProgressHandler = OptimizeProgressValue;
         }
 
         // ─── Stats display ───────────────────────────────────────────────────────
@@ -41,32 +38,23 @@ namespace ToolKitV.Views
 
         // ─── Progress callbacks ──────────────────────────────────────────────────
 
-        public delegate void AnalyzeProgress(int progress);
-        public Delegate AnalyzeProgressHandler;
-
         private void AnalyzeProgressValue(int progress)
         {
-            Dispatcher.Invoke(() =>
-            {
-                AnalyzeButton.SetProgress(progress);
-            });
+            AnalyzeButton.SetProgress(progress);
         }
 
-        public delegate void OptimizeProgress(ResultsData data, int progress);
-        public Delegate OptimizeProgressHandler;
-
-        private void OptimizeProgressValue(ResultsData data, int progress)
+        private void OptimizeProgressValue((ResultsData data, int progress) report)
         {
-            Dispatcher.Invoke(() =>
-            {
-                OptimizeButton.SetProgress(progress);
+            var data = report.data;
+            var progress = report.progress;
+            
+            OptimizeButton.SetProgress(progress);
 
-                if (data.filesOptimized > 0)
-                {
-                    Stats.OptimizedFiles.Text = data.filesOptimized.ToString();
-                    Stats.OptimizedSize.Text  = Math.Round(data.optimizedSize, 2) + " MB";
-                }
-            });
+            if (data.filesOptimized > 0)
+            {
+                Stats.OptimizedFiles.Text = data.filesOptimized.ToString();
+                Stats.OptimizedSize.Text  = Math.Round(data.optimizedSize, 2) + " MB";
+            }
         }
 
         // ─── Validation ──────────────────────────────────────────────────────────
@@ -122,7 +110,8 @@ namespace ToolKitV.Views
             SetButtonsEnabled(false);
             AnalyzeButton.Title = "Scanning...";
 
-            StatsData data = await Task.Run(() => GetStatsData(MainPath, AnalyzeProgressHandler));
+            var progress = new Progress<int>(AnalyzeProgressValue);
+            StatsData data = await Task.Run(() => GetStatsData(MainPath, progress));
             UpdateData(data);
 
             SetButtonsEnabled(true);
@@ -150,10 +139,11 @@ namespace ToolKitV.Views
             UpdateData(before);
 
             // Run the optimization.
+            var progress = new Progress<(ResultsData, int)>(OptimizeProgressValue);
             await Task.Run(() => Optimize(
                 MainPath, BackupPath, OptimizeSizeValue,
                 OnlyOverSizedToogled, DownSizeValue, FormatOptimizeValue, AutoDownscale4KValue,
-                OptimizeProgressHandler));
+                progress));
 
             // Gather post-optimization stats.
             StatsData after = await Task.Run(() => GetStatsData(MainPath, null));
@@ -186,16 +176,17 @@ namespace ToolKitV.Views
             FixScriptRtButton.Title = "Scanning...";
             ScriptRtResultBorder.Visibility = System.Windows.Visibility.Collapsed;
 
-            ScriptRtResultsData result = await Task.Run(() =>
-                FixScriptRTs(MainPath, BackupPath, null!));
-
-            Dispatcher.Invoke(() =>
+            var progress = new Progress<(ScriptRtResultsData, int)>(report => 
             {
+                var result = report.results;
                 ScriptRtScanned.Text  = result.ytdsScanned.ToString();
                 ScriptRtFixed.Text    = result.ytdsFixed.ToString();
                 ScriptRtTextures.Text = result.texturesFixed.ToString();
-                ScriptRtResultBorder.Visibility = System.Windows.Visibility.Visible;
             });
+
+            ScriptRtResultsData result = await Task.Run(() => FixScriptRTs(MainPath, BackupPath, progress));
+
+            ScriptRtResultBorder.Visibility = System.Windows.Visibility.Visible;
 
             SetButtonsEnabled(true);
             FixScriptRtButton.Title = "Fix Script RT Crashes";
