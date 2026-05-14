@@ -380,7 +380,8 @@ namespace ToolKitV.Models
             bool downsize,
             bool formatOptimization,
             bool autoDownscale4K,
-            IProgress<(ResultsData results, int progress)> progressHandler)
+            IProgress<(ResultsData results, int progress)> progressHandler,
+            LogWriter log)
         {
             ResultsData results = new();
             string[] inputFiles = Directory.GetFiles(inputDirectory, "*.ytd", SearchOption.AllDirectories);
@@ -394,7 +395,7 @@ namespace ToolKitV.Models
             long totalOptimizedSizeSaved = 0; // Use long for thread-safe Interlocked operations
             int totalFilesOptimized = 0;
 
-            await using var log = new LogWriter($"=== TGToolKit optimization started on {inputFiles.Length} files ===");
+            log.LogWrite($"=== TGToolKit optimization started on {inputFiles.Length} files ===");
 
             // Utilize all CPU cores safely
             var parallelOptions = new ParallelOptions 
@@ -524,7 +525,8 @@ namespace ToolKitV.Models
         public static async Task<ScriptRtResultsData> FixScriptRTs(
             string inputDirectory,
             string backupDirectory,
-            IProgress<(ScriptRtResultsData results, int progress)> progressHandler)
+            IProgress<(ScriptRtResultsData results, int progress)> progressHandler,
+            LogWriter log)
         {
             ScriptRtResultsData results = new();
             string[] inputFiles = Directory.GetFiles(inputDirectory, "*.ytd", SearchOption.AllDirectories);
@@ -536,7 +538,7 @@ namespace ToolKitV.Models
             int totalYtdsFixed = 0;
             int totalTexturesFixed = 0;
 
-            await using var log = new LogWriter($"=== TGToolKit Script RT Fix started on {inputFiles.Length} files ===");
+            log.LogWrite($"=== TGToolKit Script RT Fix started on {inputFiles.Length} files ===");
 
             var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
 

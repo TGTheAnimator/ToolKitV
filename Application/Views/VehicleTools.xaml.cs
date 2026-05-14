@@ -130,36 +130,67 @@ namespace ToolKitV.Views
                 if (confirm != MessageBoxResult.Yes) return;
             }
 
+            // 1. Lock the UI to prevent double-execution
             SetBusy(true);
             MergeButton.Title = "Merging...";
             ResultStatus.Text = "Running...";
             ResetResultsDisplay();
 
-            var progress = new Progress<(MergeResults, int)>(MergeProgressValue);
+            try
+            {
+                // 2. Gather UI values safely
+                string resourcePath = _resourcePath;
+                string backupPath = _backupPath;
+                bool cleanupSources = _cleanupSources;
 
-            MergeResults result = await Task.Run(() => MergeVehicleMetas(_resourcePath, _backupPath, _cleanupSources, progress));
+                // 3. Initialize the Async Logger
+                await using var logWriter = new LogWriter("=== Vehicle Meta Merge started via UI ===");
 
-            // Final counts
-            ScanVehiclesCount.Text   = result.VehiclesFilesFound.ToString();
-            ScanHandlingCount.Text   = result.HandlingFilesFound.ToString();
-            ScanCarcolsCount.Text    = result.CarcolsFilesFound.ToString();
-            ScanVariationsCount.Text = result.VariationsFilesFound.ToString();
-            ScanLayoutsCount.Text    = result.LayoutsFilesFound.ToString();
+                // 4. Offload the heavy lifting to the ThreadPool
+                var progress = new Progress<(MergeResults, int)>(MergeProgressValue);
+                MergeResults result = await Task.Run(() => MergeVehicleMetas(resourcePath, backupPath, cleanupSources, progress, logWriter));
 
-            ResultVehicles.Text     = result.VehiclesMerged.ToString();
-            ResultHandling.Text     = result.HandlingMerged.ToString();
-            ResultKitsLights.Text   = $"{result.KitsMerged} / {result.LightsMerged} / {result.SirenSettingsMerged}";
-            ResultVariations.Text   = result.VariationsMerged.ToString();
-            ResultConflicts.Text    = result.ConflictsResolved.ToString();
-            ResultDupes.Text        = result.DuplicatesSkipped.ToString();
-            ResultStatus.Text       = "✓ Done";
+                // 5. Handle Success
+                // Final counts
+                ScanVehiclesCount.Text   = result.VehiclesFilesFound.ToString();
+                ScanHandlingCount.Text   = result.HandlingFilesFound.ToString();
+                ScanCarcolsCount.Text    = result.CarcolsFilesFound.ToString();
+                ScanVariationsCount.Text = result.VariationsFilesFound.ToString();
+                ScanLayoutsCount.Text    = result.LayoutsFilesFound.ToString();
 
-            if (result.Warnings?.Count > 0)
-                ResultConflicts.Foreground = System.Windows.Media.Brushes.OrangeRed;
+                ResultVehicles.Text     = result.VehiclesMerged.ToString();
+                ResultHandling.Text     = result.HandlingMerged.ToString();
+                ResultKitsLights.Text   = $"{result.KitsMerged} / {result.LightsMerged} / {result.SirenSettingsMerged}";
+                ResultVariations.Text   = result.VariationsMerged.ToString();
+                ResultConflicts.Text    = result.ConflictsResolved.ToString();
+                ResultDupes.Text        = result.DuplicatesSkipped.ToString();
+                ResultStatus.Text       = "✓ Done";
 
-            MergeButton.Title = "Merge";
-            MergeButton.ResetProgress();
-            SetBusy(false);
+                if (result.Warnings?.Count > 0)
+                    ResultConflicts.Foreground = System.Windows.Media.Brushes.OrangeRed;
+
+                MessageBox.Show(
+                    "Vehicle metadata consolidation complete.",
+                    "TGToolKit — Success",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"A fatal error occurred during vehicle meta merge:\n\n{ex.Message}",
+                    "TGToolKit — Fatal Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                ResultStatus.Text = "Error";
+            }
+            finally
+            {
+                // 6. Always unlock the UI
+                MergeButton.Title = "Merge";
+                MergeButton.ResetProgress();
+                SetBusy(false);
+            }
         }
 
         // ── Scan-only helper (discovery pass, no IO writes) ───────────────────

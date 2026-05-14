@@ -131,35 +131,64 @@ namespace ToolKitV.Views
                 return;
             }
 
+            // 1. Lock the UI to prevent double-execution
             SetButtonsEnabled(false);
             OptimizeButton.Title = "Optimizing...";
 
-            // Gather pre-optimization stats.
-            StatsData before = await Task.Run(() => GetStatsData(MainPath, null));
-            UpdateData(before);
-
-            // Run the optimization.
-            var progress = new Progress<(ResultsData, int)>(OptimizeProgressValue);
-            await Task.Run(() => Optimize(
-                MainPath, BackupPath, OptimizeSizeValue,
-                OnlyOverSizedToogled, DownSizeValue, FormatOptimizeValue, AutoDownscale4KValue,
-                progress));
-
-            // Gather post-optimization stats.
-            StatsData after = await Task.Run(() => GetStatsData(MainPath, null));
-
-            if (before.physicalSize > 0)
+            try
             {
-                double saved   = before.physicalSize - after.physicalSize;
-                double percent = 100.0 - (after.physicalSize * 100.0 / before.physicalSize);
+                // 2. Gather UI values safely (already in properties, but ensure consistency)
+                string mainPath = MainPath;
+                string backupPath = BackupPath;
+                string sizeVal = OptimizeSizeValue;
 
-                Stats.FilesSizeResult.Text  = Math.Round(after.physicalSize, 2) + " MB";
-                Stats.OptimizedProcent.Text = Math.Round(percent, 2) + "%";
+                // 3. Initialize the Async Logger (using C# 8+ async using statement)
+                await using var logWriter = new LogWriter("=== Texture Optimization started via UI ===");
+
+                // 4. Gather pre-optimization stats
+                StatsData before = await Task.Run(() => GetStatsData(mainPath, null));
+                UpdateData(before);
+
+                // 5. Offload the heavy lifting to the ThreadPool
+                var progress = new Progress<(ResultsData, int)>(OptimizeProgressValue);
+                ResultsData results = await Task.Run(() => Optimize(
+                    mainPath, backupPath, sizeVal,
+                    OnlyOverSizedToogled, DownSizeValue, FormatOptimizeValue, AutoDownscale4KValue,
+                    progress, logWriter));
+
+                // 6. Gather post-optimization stats
+                StatsData after = await Task.Run(() => GetStatsData(mainPath, null));
+
+                if (before.physicalSize > 0)
+                {
+                    double saved   = before.physicalSize - after.physicalSize;
+                    double percent = 100.0 - (after.physicalSize * 100.0 / before.physicalSize);
+
+                    Stats.FilesSizeResult.Text  = Math.Round(after.physicalSize, 2) + " MB";
+                    Stats.OptimizedProcent.Text = Math.Round(percent, 2) + "%";
+                }
+
+                MessageBox.Show(
+                    $"Optimization complete.\nSaved: {results.optimizedSize:F2} MB\nTextures Optimized: {results.filesOptimized}",
+                    "TGToolKit — Success",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
             }
-
-            SetButtonsEnabled(true);
-            OptimizeButton.Title = "Optimize";
-            OptimizeButton.ResetProgress();
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"A fatal error occurred during optimization:\n\n{ex.Message}",
+                    "TGToolKit — Fatal Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                // 7. Always unlock the UI
+                SetButtonsEnabled(true);
+                OptimizeButton.Title = "Optimize";
+                OptimizeButton.ResetProgress();
+            }
         }
 
         private void SetButtonsEnabled(bool enabled)
@@ -172,24 +201,53 @@ namespace ToolKitV.Views
 
         private async void FixScriptRtButton_Click(object sender, RoutedEventArgs e)
         {
+            // 1. Lock the UI to prevent double-execution
             SetButtonsEnabled(false);
             FixScriptRtButton.Title = "Scanning...";
             ScriptRtResultBorder.Visibility = System.Windows.Visibility.Collapsed;
 
-            var progress = new Progress<(ScriptRtResultsData, int)>(report => 
+            try
             {
-                var result = report.results;
-                ScriptRtScanned.Text  = result.ytdsScanned.ToString();
-                ScriptRtFixed.Text    = result.ytdsFixed.ToString();
-                ScriptRtTextures.Text = result.texturesFixed.ToString();
-            });
+                // 2. Gather UI values safely
+                string mainPath = MainPath;
+                string backupPath = BackupPath;
 
-            ScriptRtResultsData result = await Task.Run(() => FixScriptRTs(MainPath, BackupPath, progress));
+                // 3. Initialize the Async Logger
+                await using var logWriter = new LogWriter("=== Script RT Fix started via UI ===");
 
-            ScriptRtResultBorder.Visibility = System.Windows.Visibility.Visible;
+                // 4. Offload the heavy lifting to the ThreadPool
+                var progress = new Progress<(ScriptRtResultsData, int)>(report => 
+                {
+                    var result = report.results;
+                    ScriptRtScanned.Text  = result.ytdsScanned.ToString();
+                    ScriptRtFixed.Text    = result.ytdsFixed.ToString();
+                    ScriptRtTextures.Text = result.texturesFixed.ToString();
+                });
 
-            SetButtonsEnabled(true);
-            FixScriptRtButton.Title = "Fix Script RT Crashes";
+                ScriptRtResultsData result = await Task.Run(() => FixScriptRTs(mainPath, backupPath, progress, logWriter));
+
+                // 5. Handle Success
+                ScriptRtResultBorder.Visibility = System.Windows.Visibility.Visible;
+                MessageBox.Show(
+                    $"Fix complete.\nScanned: {result.ytdsScanned}\nYTDs Fixed: {result.ytdsFixed}\nTextures Decompressed: {result.texturesFixed}",
+                    "TGToolKit — Success",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"A fatal error occurred during script RT fix:\n\n{ex.Message}",
+                    "TGToolKit — Fatal Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                // 6. Always unlock the UI
+                SetButtonsEnabled(true);
+                FixScriptRtButton.Title = "Fix Script RT Crashes";
+            }
         }
     }
 }

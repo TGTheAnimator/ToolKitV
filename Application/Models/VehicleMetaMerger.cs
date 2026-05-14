@@ -73,7 +73,8 @@ namespace ToolKitV.Models
             string   resourceDirectory,
             string   backupDirectory,
             bool     removeSourceFiles,
-            IProgress<(MergeResults results, int progress)> progressHandler)
+            IProgress<(MergeResults results, int progress)> progressHandler,
+            LogWriter log)
         {
             MergeResults results = new() { Warnings = new List<string>() };
 
@@ -86,7 +87,7 @@ namespace ToolKitV.Models
             results.VariationsFilesFound = discovered.GetValueOrDefault(VariationsMeta)?.Count ?? 0;
             results.LayoutsFilesFound    = discovered.GetValueOrDefault(LayoutsMeta)?.Count   ?? 0;
 
-            await using var log = new LogWriter("=== TGToolKit Vehicle Meta Merge started ===");
+            log.LogWrite($"=== TGToolKit Vehicle Meta Merge started ===");
             log.LogWrite($"Resource directory: {resourceDirectory}");
             LogDiscovery(discovered, log);
 
