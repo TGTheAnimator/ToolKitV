@@ -46,12 +46,17 @@ namespace ToolKitV.Models
         public List<FileAuditEntry> Files { get; set; } = new();
         public DangerLevel OverallStatus { get; set; }
         public List<string> Recommendations { get; set; } = new();
+        public TimeSpan AuditDuration { get; set; }
     }
 
     public static class ResourceAudit
     {
-        public static AuditResult AuditResource(string resourcePath, IProgress<(int progress, int current, int total)>? progressHandler = null)
+        public static AuditResult AuditResource(
+            string resourcePath, 
+            IProgress<(int progress, int current, int total)>? progressHandler = null,
+            LogWriter? log = null)
         {
+            var startTime = DateTime.Now;
             var result = new AuditResult
             {
                 ResourceName = Path.GetFileName(resourcePath),
@@ -60,6 +65,7 @@ namespace ToolKitV.Models
 
             var allFiles = Directory.GetFiles(resourcePath, "*.*", SearchOption.AllDirectories);
             int total = allFiles.Length;
+            log?.LogWrite($"=== TGToolKit Resource Audit started on {allFiles.Length} files ===");
             int current = 0;
 
             foreach (var file in allFiles)
@@ -168,12 +174,13 @@ namespace ToolKitV.Models
                 result.OverallStatus = DangerLevel.Safe;
             }
 
-            GenerateReport(result, resourcePath);
+            result.AuditDuration = DateTime.Now - startTime;
+            GenerateReportAsync(result, resourcePath, log).GetAwaiter().GetResult();
 
             return result;
         }
 
-        private static void GenerateReport(AuditResult result, string directoryPath)
+        private static async Task GenerateReportAsync(AuditResult result, string directoryPath, LogWriter? log = null)
         {
             var sb = new StringBuilder();
             sb.AppendLine("═════════════════════════════════════════════════");
@@ -219,9 +226,13 @@ namespace ToolKitV.Models
             string reportPath = Path.Combine(directoryPath, "resource_audit_report.txt");
             try
             {
-                File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
+                await File.WriteAllTextAsync(reportPath, sb.ToString(), Encoding.UTF8);
+                log?.LogWrite($"[REPORT] Saved resource audit report to {reportPath}");
             }
-            catch { /* Best effort */ }
+            catch (Exception ex)
+            {
+                log?.LogWrite($"[ERROR] Could not write audit report: {ex.Message}");
+            }
         }
     }
 }

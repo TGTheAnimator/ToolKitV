@@ -16,12 +16,18 @@
         <!-- ══ COLUMN 0 — Settings + Action Buttons ══ -->
         <DockPanel Grid.Column="0" LastChildFill="True">
             
-            <Grid DockPanel.Dock="Bottom" Margin="0 16 0 0">
+            <StackPanel DockPanel.Dock="Bottom" Margin="0 16 0 0">
                 <local:Button x:Name="RunAuditButton"
-                              Title="Run Asset Audit"
-                              IsButtonEnabledValue="False"
-                              Click="RunAuditButton_Click"/>
-            </Grid>
+                               Title="Run Asset Audit"
+                               IsButtonEnabledValue="False"
+                               Click="RunAuditButton_Click"
+                               Margin="0 0 0 10"/>
+                
+                <local:Button x:Name="RunModelScanButton"
+                               Title="Run Model Analysis"
+                               IsButtonEnabledValue="False"
+                               Click="RunModelScanButton_Click"/>
+            </StackPanel>
 
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"

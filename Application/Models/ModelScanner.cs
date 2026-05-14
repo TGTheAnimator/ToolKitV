@@ -55,7 +55,10 @@ namespace ToolKitV.Models
             public TimeSpan ScanDuration;
         }
 
-        public static async Task<ScanResults> ScanDirectory(string directoryPath, IProgress<(int progress, int current, int total)> progressHandler)
+        public static async Task<ScanResults> ScanDirectoryAsync(
+            string directoryPath, 
+            IProgress<int> progressHandler, 
+            LogWriter log)
         {
             var results = new ScanResults();
             var startTime = DateTime.Now;
@@ -66,38 +69,41 @@ namespace ToolKitV.Models
 
             results.TotalFilesScanned = allFiles.Length;
 
-            if (allFiles.Length == 0)
-                return results;
+            if (allFiles.Length == 0) return results;
 
             var statsBag = new ConcurrentBag<ModelStats>();
             int processedCount = 0;
 
-            Parallel.ForEach(allFiles, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, file =>
+            log.LogWrite($"=== TGToolKit Model Scan started on {allFiles.Length} files ===");
+
+            // Bounded Concurrency: Limit to half the processor count, max 8.
+            // This prevents RAM from exploding when scanning massive server builds.
+            int maxConcurrency = Math.Max(2, Math.Min(Environment.ProcessorCount / 2, 8));
+            var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = maxConcurrency };
+
+            await Parallel.ForEachAsync(allFiles, parallelOptions, async (file, token) =>
             {
                 try
                 {
-                    var stats = AnalyzeModel(file);
+                    var stats = await AnalyzeModelAsync(file);
                     statsBag.Add(stats);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // If we can't parse it, it's either corrupt or locked. We skip it so we don't crash the tool.
+                    log.LogWrite($"[ERROR] Failed to parse {Path.GetFileName(file)}: {ex.Message}");
                 }
 
                 int count = System.Threading.Interlocked.Increment(ref processedCount);
-                if (count % 10 == 0 || count == allFiles.Length)
+                if (count % Math.Max(1, allFiles.Length / 100) == 0 || count == allFiles.Length)
                 {
                     int progress = (int)((double)count / allFiles.Length * 100);
-                    progressHandler?.Report((progress, count, allFiles.Length));
+                    progressHandler?.Report(progress);
                 }
             });
 
             foreach (var stat in statsBag)
             {
-                if (stat.Status == DangerLevel.Safe)
-                {
-                    results.SafeFiles++;
-                }
+                if (stat.Status == DangerLevel.Safe) results.SafeFiles++;
                 else
                 {
                     if (stat.Status == DangerLevel.Warning) results.WarningFiles++;
@@ -106,19 +112,19 @@ namespace ToolKitV.Models
                 }
             }
 
-            // Sort flagged models by worst first (Critical -> Warning, then by highest vertices)
             results.FlaggedModels = results.FlaggedModels
                 .OrderByDescending(x => x.Status)
                 .ThenByDescending(x => x.HighestLODVertices)
                 .ToList();
 
             results.ScanDuration = DateTime.Now - startTime;
-            GenerateReport(directoryPath, results);
+            await GenerateReportAsync(directoryPath, results, log);
 
+            log.LogWrite("=== TGToolKit Model Scan finished ===");
             return results;
         }
 
-        private static ModelStats AnalyzeModel(string filePath)
+        private static async Task<ModelStats> AnalyzeModelAsync(string filePath)
         {
             var stats = new ModelStats
             {
@@ -146,7 +152,8 @@ namespace ToolKitV.Models
                 stats.Issues.Add("Diagnostic: Disk size is larger than virtual size. Possible corrupted RSC header or unusual compression.");
             }
 
-            byte[] data = File.ReadAllBytes(filePath);
+            // Asynchronous file reading keeps the disk I/O thread free
+            byte[] data = await File.ReadAllBytesAsync(filePath);
             DrawableBase? drawable = null;
 
             var entry = new RpfResourceFileEntry { Name = Path.GetFileName(filePath) };
@@ -230,7 +237,7 @@ namespace ToolKitV.Models
             }
         }
 
-        private static void GenerateReport(string directoryPath, ScanResults results)
+        private static async Task GenerateReportAsync(string directoryPath, ScanResults results, LogWriter log)
         {
             if (results.FlaggedModels.Count == 0) return;
 
@@ -283,9 +290,13 @@ namespace ToolKitV.Models
             string reportPath = Path.Combine(directoryPath, "oversized_models_report.txt");
             try
             {
-                File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
+                await File.WriteAllTextAsync(reportPath, sb.ToString(), Encoding.UTF8);
+                log.LogWrite($"[REPORT] Saved oversized models report to {reportPath}");
             }
-            catch { /* Best effort */ }
+            catch (Exception ex)
+            {
+                log.LogWrite($"[ERROR] Could not write report: {ex.Message}");
+            }
         }
     }
 }
