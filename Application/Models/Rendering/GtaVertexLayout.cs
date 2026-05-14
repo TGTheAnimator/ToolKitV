@@ -45,7 +45,7 @@ namespace ToolKitV.Rendering
                 VertexComponentType.Float4     => Format.R32G32B32A32_Float,
                 VertexComponentType.Float2     => Format.R32G32_Float,
                 VertexComponentType.UByte4     => Format.R8G8B8A8_UNorm,
-                VertexComponentType.Dec3N      => Format.R10G10B10A2_UNorm, // Normal/Tangent compression
+                ((VertexComponentType)11)      => Format.R10G10B10A2_UNorm, // Dec3N: Normal/Tangent compression
                 VertexComponentType.Half2      => Format.R16G16_Float,      // 16-bit UVs
                 VertexComponentType.Half4      => Format.R16G16B16A16_Float,
                 VertexComponentType.Colour     => Format.B8G8R8A8_UNorm,

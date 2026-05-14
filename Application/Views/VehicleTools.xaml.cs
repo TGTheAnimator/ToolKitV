@@ -222,54 +222,76 @@ namespace ToolKitV.Views
 
         private async void ScanModelsButton_Click(object sender, RoutedEventArgs e)
         {
+            if (string.IsNullOrWhiteSpace(_resourcePath) || !Directory.Exists(_resourcePath)) return;
+
+            // 1. Lock the UI
             SetBusy(true);
             ScanModelsButton.Title = "Scanning Models...";
             ResetModelScanDisplay();
 
-            var progress = new Progress<(int progress, int current, int total)>(report => 
+            try
             {
-                ScanModelsButton.SetProgress(report.progress);
-                ScanModelsButton.Title = $"Scanning {report.current}/{report.total}...";
-            });
+                // 2. Gather UI values
+                string path = _resourcePath;
 
-            ModelScanner.ScanResults results = await Task.Run(() => ModelScanner.ScanDirectory(_resourcePath, progress));
+                // 3. Initialize Logger
+                await using var logWriter = new LogWriter("=== Legacy Model Scan started via UI ===");
 
-            if (results != null)
-            {
-                ModelScanTotal.Text = results.TotalFilesScanned.ToString();
-                ModelScanSafe.Text = results.SafeFiles.ToString();
-                ModelScanWarnings.Text = results.WarningFiles.ToString();
-                ModelScanCritical.Text = results.CriticalFiles.ToString();
+                // 4. Offload heavy lifting
+                var progress = new Progress<int>(percent => 
+                {
+                    ScanModelsButton.SetProgress(percent);
+                    ScanModelsButton.Title = $"Scanning... {percent}%";
+                });
 
-                if (results.CriticalFiles > 0)
+                ModelScanner.ScanResults results = await Task.Run(() => 
+                    ModelScanner.ScanDirectoryAsync(path, progress, logWriter));
+
+                // 5. Handle Success
+                if (results != null)
                 {
-                    MessageBox.Show(
-                        $"Found {results.CriticalFiles} critical model(s) exceeding GTA V engine limits! These will cause the 'georgia-alaska-october' crash.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
-                        "TGToolKit — Critical Models Found",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
-                }
-                else if (results.WarningFiles > 0)
-                {
-                    MessageBox.Show(
-                        $"Found {results.WarningFiles} heavy model(s). They might not crash the game but can cause instability or FPS drops.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
-                        "TGToolKit — Heavy Models Found",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
-                }
-                else if (results.TotalFilesScanned > 0)
-                {
-                    MessageBox.Show(
-                        $"All {results.TotalFilesScanned} scanned models are within safe limits. Your server shouldn't crash from these geometries.",
-                        "TGToolKit — Scan Complete",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                    ModelScanTotal.Text = results.TotalFilesScanned.ToString();
+                    ModelScanSafe.Text = results.SafeFiles.ToString();
+                    ModelScanWarnings.Text = results.WarningFiles.ToString();
+                    ModelScanCritical.Text = results.CriticalFiles.ToString();
+
+                    if (results.CriticalFiles > 0)
+                    {
+                        MessageBox.Show(
+                            $"Found {results.CriticalFiles} critical model(s) exceeding GTA V engine limits! These will cause the 'georgia-alaska-october' crash.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
+                            "TGToolKit — Critical Models Found",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                    }
+                    else if (results.WarningFiles > 0)
+                    {
+                        MessageBox.Show(
+                            $"Found {results.WarningFiles} heavy model(s). They might not crash the game but can cause instability or FPS drops.\n\nCheck 'oversized_models_report.txt' in the selected folder for details.",
+                            "TGToolKit — Heavy Models Found",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
+                    else if (results.TotalFilesScanned > 0)
+                    {
+                        MessageBox.Show(
+                            $"All {results.TotalFilesScanned} scanned models are within safe limits. Your server shouldn't crash from these geometries.",
+                            "TGToolKit — Scan Complete",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                    }
                 }
             }
-
-            ScanModelsButton.Title = "Scan YFT Models";
-            ScanModelsButton.ResetProgress();
-            SetBusy(false);
+            catch (Exception ex)
+            {
+                MessageBox.Show($"A fatal error occurred during model analysis:\n\n{ex.Message}", "TGToolKit — Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                // 6. Always unlock
+                SetBusy(false);
+                ScanModelsButton.Title = "Scan YFT Models";
+                ScanModelsButton.ResetProgress();
+            }
         }
 
         // ── UI helpers ────────────────────────────────────────────────────────

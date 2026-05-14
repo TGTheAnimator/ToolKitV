@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using static ToolKitV.Models.TextureOptimization;
+using ToolKitV.Models;
 
 namespace ToolKitV.Views
 {
@@ -216,7 +217,7 @@ namespace ToolKitV.Views
                 await using var logWriter = new LogWriter("=== Script RT Fix started via UI ===");
 
                 // 4. Offload the heavy lifting to the ThreadPool
-                var progress = new Progress<(ScriptRtResultsData, int)>(report => 
+                var progress = new Progress<(ScriptRtResultsData results, int progress)>(report => 
                 {
                     var result = report.results;
                     ScriptRtScanned.Text  = result.ytdsScanned.ToString();

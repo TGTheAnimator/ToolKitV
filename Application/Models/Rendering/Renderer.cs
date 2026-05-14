@@ -74,9 +74,9 @@ namespace ToolKitV.Models.Rendering
         private VertexShader?   _vs_P, _vs_PN, _vs_PT, _vs_PNT;
         private byte[]?         _vsBlob_P, _vsBlob_PN, _vsBlob_PT, _vsBlob_PNT;
         private PixelShader?    _ps;
-        private Buffer          _cb;
-        private SamplerState    _sampler;
-        private RasterizerState _rs;
+        private Buffer          _cb = null!;
+        private SamplerState    _sampler = null!;
+        private RasterizerState _rs = null!;
 
         // Texture cache: name → SRV (case-insensitive, matches YTD names)
         private readonly Dictionary<string, ShaderResourceView> _textures
@@ -158,7 +158,7 @@ namespace ToolKitV.Models.Rendering
 
             var bytecode = SharpDX.D3DCompiler.ShaderBytecode.Compile(
                 hlsl, "VS", "vs_5_0", SharpDX.D3DCompiler.ShaderFlags.None,
-                SharpDX.D3DCompiler.EffectFlags.None, macros.ToArray());
+                SharpDX.D3DCompiler.EffectFlags.None, macros.ToArray(), null);
 
             return (new VertexShader(_device, bytecode.Bytecode.Data), bytecode.Bytecode.Data);
         }
