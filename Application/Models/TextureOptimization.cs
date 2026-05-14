@@ -4,13 +4,28 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
-using ToolKitV.Models;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ToolKitV.Models
 {
     public partial class TextureOptimization
     {
-        // ─── Public data structures ──────────────────────────────────────────────
+
+        // ─── ACCURACY HELPER ─────────────────────────────────────────────────────
+        
+        /// <summary>
+        /// Block Compression (BC1-BC7) requires dimensions to be a multiple of 4.
+        /// If we downscale to a non-multiple of 4, the byte-stride misaligns and corrupts the texture in-game.
+        /// </summary>
+        private static ushort MakeMultipleOf4(int value)
+        {
+            int remainder = value % 4;
+            if (remainder == 0) return (ushort)value;
+            
+            // Round down to the nearest multiple of 4 to be safe with memory bounds
+            return (ushort)Math.Max(4, value - remainder);
+        }
 
         public struct StatsData
         {
@@ -229,9 +244,6 @@ namespace ToolKitV.Models
 
         private static Texture OptimizeTexture(Texture texture, bool formatOptimization, bool downsize, bool autoDownscale4K)
         {
-            // Clamp mip levels to the valid maximum for this texture's dimensions.
-            texture.Levels = ClampMipLevels(texture);
-
             string? tempPath = CreateTempTextureFile(texture);
             if (tempPath is null) return texture;
 
@@ -241,22 +253,21 @@ namespace ToolKitV.Models
 
                 if (downsize)
                 {
-                    // Halve dimensions but guard against going below 4px (BC block minimum).
-                    texture.Width  = (ushort)Math.Max(4, texture.Width  / 2);
-                    texture.Height = (ushort)Math.Max(4, texture.Height / 2);
-                    texture.Levels = ClampMipLevels(texture);
+                    // Halve dimensions, strictly enforcing the Rule of 4
+                    texture.Width  = MakeMultipleOf4(texture.Width / 2);
+                    texture.Height = MakeMultipleOf4(texture.Height / 2);
                 }
                 else if (autoDownscale4K)
                 {
-                    // Reduce anything > 2048 to a max of 2048
                     while (texture.Width > 2048 || texture.Height > 2048)
                     {
-                        texture.Width  = (ushort)Math.Max(4, texture.Width  / 2);
-                        texture.Height = (ushort)Math.Max(4, texture.Height / 2);
+                        texture.Width  = MakeMultipleOf4(texture.Width / 2);
+                        texture.Height = MakeMultipleOf4(texture.Height / 2);
                     }
-                    texture.Levels = ClampMipLevels(texture);
                 }
 
+                // Recalculate mip levels AFTER dimension changes to ensure chain validity
+                texture.Levels = ClampMipLevels(texture);
                 texture = ConvertTexture(texture, format, tempPath);
             }
             finally
@@ -358,125 +369,143 @@ namespace ToolKitV.Models
         // ─── Public API — Optimize ───────────────────────────────────────────────
 
         /// <summary>
-        /// Optimises all .ytd files found recursively under <paramref name="inputDirectory"/>.
-        ///
-        /// FiveM streaming budget is based on virtual (GPU) size, so oversized detection
-        /// uses virtualMB — not physicalMB as the original code did.
-        ///
-        /// <paramref name="optimizeSize"/> is the threshold (Width + Height in px) above
-        /// which individual textures are reprocessed.
+        /// Asynchronously optimizes all YTDs using all available CPU cores.
+        /// Replaces the old sequential, blocking method.
         /// </summary>
         public static async Task<ResultsData> Optimize(
-            string   inputDirectory,
-            string   backupDirectory,
-            string   optimizeSize,
-            bool     onlyOverSized,
-            bool     downsize,
-            bool     formatOptimization,
-            bool     autoDownscale4K,
+            string inputDirectory,
+            string backupDirectory,
+            string optimizeSize,
+            bool onlyOverSized,
+            bool downsize,
+            bool formatOptimization,
+            bool autoDownscale4K,
             IProgress<(ResultsData results, int progress)> progressHandler)
         {
             ResultsData results = new();
+            string[] inputFiles = Directory.GetFiles(inputDirectory, "*.ytd", SearchOption.AllDirectories);
+            
+            if (inputFiles.Length == 0) return results;
 
-            string[] inputFiles       = Directory.GetFiles(inputDirectory, "*.ytd", SearchOption.AllDirectories);
-            ushort   optimizeSizeVal  = Convert.ToUInt16(optimizeSize);
-            bool     doBackup         = !string.IsNullOrEmpty(backupDirectory);
-            int      currentProgress  = 0;
+            ushort optimizeSizeVal = Convert.ToUInt16(optimizeSize);
+            bool doBackup = !string.IsNullOrEmpty(backupDirectory);
+            
+            int filesProcessed = 0;
+            long totalOptimizedSizeSaved = 0; // Use long for thread-safe Interlocked operations
+            int totalFilesOptimized = 0;
 
-            await using var log = new LogWriter("=== TGToolKit optimisation started ===");
+            await using var log = new LogWriter($"=== TGToolKit optimization started on {inputFiles.Length} files ===");
 
-            for (int i = 0; i < inputFiles.Length; i++)
+            // Utilize all CPU cores safely
+            var parallelOptions = new ParallelOptions 
+            { 
+                MaxDegreeOfParallelism = Environment.ProcessorCount 
+            };
+
+            await Parallel.ForEachAsync(inputFiles, parallelOptions, async (filePath, token) =>
             {
-                string filePath = inputFiles[i];
                 string fileName = Path.GetFileName(filePath);
+                var (virtualMB, diskMB) = GetFileSize(filePath, null); 
 
-                log.LogWrite($"Processing: {filePath}");
-
-                (float virtualMB, float diskMB) = GetFileSize(filePath, log);
-
-                // virtualMB == 0 means no RSC7 header — not a valid GTA V resource, skip entirely.
-                bool noRsc7 = virtualMB == 0f;
-
-                // FIX: use virtualMB for the FiveM streaming budget check (was physicalMB).
-                if (onlyOverSized && (noRsc7 || virtualMB < 16f))
+                // Skip non-RSC7 or files under the limit
+                if (virtualMB == 0f || (onlyOverSized && virtualMB < 16f))
                 {
-                    log.LogWrite($"  Skipped (not oversized): virtual={virtualMB:F2} MB");
-                    continue;
-                }
-
-                if (noRsc7)
-                {
-                    log.LogWrite($"  Skipped (no RSC7 header / invalid file)");
-                    continue;
+                    UpdateProgress();
+                    return; 
                 }
 
                 YtdFile ytdFile;
                 try
                 {
+                    // CodeWalker isn't inherently thread-safe for reading the SAME file, 
+                    // but we are reading DIFFERENT files concurrently, which is perfectly safe.
                     ytdFile = CreateYtdFile(filePath);
                 }
                 catch (Exception ex)
                 {
-                    log.LogWrite($"  ERROR loading YTD: {ex.Message}");
-                    continue;
+                    log.LogWrite($"[ERROR] Failed to parse {fileName}: {ex.Message}");
+                    UpdateProgress();
+                    return;
                 }
 
                 bool ytdChanged = false;
+                int localOptimizedCount = 0;
 
                 for (int j = 0; j < ytdFile.TextureDict.Textures.Count; j++)
                 {
-                    Texture texture          = ytdFile.TextureDict.Textures[j];
-                    bool    isScriptTexture  = texture.Name.Contains("script_rt", StringComparison.OrdinalIgnoreCase);
+                    Texture texture = ytdFile.TextureDict.Textures[j];
+                    bool isScriptTexture = texture.Name.Contains("script_rt", StringComparison.OrdinalIgnoreCase);
 
-                    // Script render-targets must stay uncompressed — decompress if needed.
                     if (isScriptTexture && IsTextureCompressed(texture))
                     {
-                        log.LogWrite($"  Decompressing script RT: {texture.Name}");
                         ytdFile.TextureDict.Textures.data_items[j] = UncompressScriptTexture(texture);
-                        results.filesOptimized++;
+                        localOptimizedCount++;
                         ytdChanged = true;
                         continue;
                     }
 
-                    // Normal textures — optimise if Width+Height meets the threshold.
                     if (!isScriptTexture && (texture.Width + texture.Height) >= optimizeSizeVal)
                     {
-                        // Create backup BEFORE the first write to this file.
                         if (!ytdChanged && doBackup)
                         {
-                            BackupFile(filePath, fileName, inputDirectory, backupDirectory, log);
+                            // Locking to prevent concurrent directory creation issues in backup
+                            lock (backupDirectory) 
+                            {
+                                BackupFile(filePath, fileName, inputDirectory, backupDirectory, log);
+                            }
                         }
 
-                        // FIX: ytdChanged = true is now ALWAYS set here, not only inside doBackup.
                         ytdChanged = true;
-
-                        log.LogWrite($"  Optimising texture: {texture.Name} ({texture.Width}x{texture.Height}, {texture.Format})");
                         ytdFile.TextureDict.Textures.data_items[j] = OptimizeTexture(texture, formatOptimization, downsize, autoDownscale4K);
-                        results.filesOptimized++;
+                        localOptimizedCount++;
                     }
                 }
 
                 if (ytdChanged)
                 {
-                    byte[] newData   = ytdFile.Save();
+                    byte[] newData = ytdFile.Save();
+                    
+                    // We can use standard File.WriteAllBytes safely because no other thread is writing to THIS specific file.
                     File.WriteAllBytes(filePath, newData);
 
-                    (float newVirtMB, float newDiskMB) = GetFileSize(filePath, log);
-                    results.optimizedSize += diskMB - newDiskMB;
+                    var (_, newDiskMB) = GetFileSize(filePath, null);
+                    float savedMB = diskMB - newDiskMB;
 
-                    log.LogWrite($"  Saved. Disk: {diskMB:F2} MB → {newDiskMB:F2} MB (saved {diskMB - newDiskMB:F2} MB)");
+                    // Thread-safe additions to global stats
+                    Interlocked.Add(ref totalFilesOptimized, localOptimizedCount);
+                    
+                    // Convert floats to bytes for accurate Interlocked addition
+                    long savedBytes = (long)(savedMB * 1024 * 1024);
+                    Interlocked.Add(ref totalOptimizedSizeSaved, savedBytes);
+
+                    log.LogWrite($"[SUCCESS] {fileName} | Optimized {localOptimizedCount} textures. Saved {savedMB:F2} MB.");
                 }
 
-                int progress = i * 100 / inputFiles.Length;
-                if (currentProgress != progress)
+                UpdateProgress();
+
+                // Local function to handle thread-safe progress updates
+                void UpdateProgress()
                 {
-                    progressHandler?.Report((results, progress));
-                    currentProgress = progress;
-                }
-            }
+                    int currentCount = Interlocked.Increment(ref filesProcessed);
+                    int percent = (int)((double)currentCount / inputFiles.Length * 100);
+                    
+                    // Update global results for the report
+                    results.filesOptimized = totalFilesOptimized;
+                    results.optimizedSize = totalOptimizedSizeSaved / 1024f / 1024f;
 
-            progressHandler?.Report((results, 100));
-            log.LogWrite("=== TGToolKit optimisation finished ===");
+                    // Only push update every few percent to avoid flooding the UI thread
+                    if (currentCount % Math.Max(1, inputFiles.Length / 100) == 0 || currentCount == inputFiles.Length)
+                    {
+                        progressHandler?.Report((results, percent));
+                    }
+                }
+            });
+
+            // Convert back to float for the final ResultsData return
+            results.filesOptimized = totalFilesOptimized;
+            results.optimizedSize = totalOptimizedSizeSaved / 1024f / 1024f;
+
+            log.LogWrite("=== TGToolKit optimization finished ===");
             return results;
         }
 
@@ -493,24 +522,28 @@ namespace ToolKitV.Models
         /// processes every YTD regardless of file size or the onlyOverSized toggle.
         /// </summary>
         public static async Task<ScriptRtResultsData> FixScriptRTs(
-            string   inputDirectory,
-            string   backupDirectory,
+            string inputDirectory,
+            string backupDirectory,
             IProgress<(ScriptRtResultsData results, int progress)> progressHandler)
         {
-            ScriptRtResultsData results  = new();
-            string[] inputFiles          = Directory.GetFiles(inputDirectory, "*.ytd", SearchOption.AllDirectories);
-            bool     doBackup            = !string.IsNullOrEmpty(backupDirectory);
-            int      currentProgress     = 0;
+            ScriptRtResultsData results = new();
+            string[] inputFiles = Directory.GetFiles(inputDirectory, "*.ytd", SearchOption.AllDirectories);
+            
+            if (inputFiles.Length == 0) return results;
 
-            await using var log = new LogWriter("=== TGToolKit Script RT Fix started ===");
+            bool doBackup = !string.IsNullOrEmpty(backupDirectory);
+            int filesProcessed = 0;
+            int totalYtdsFixed = 0;
+            int totalTexturesFixed = 0;
 
-            for (int i = 0; i < inputFiles.Length; i++)
+            await using var log = new LogWriter($"=== TGToolKit Script RT Fix started on {inputFiles.Length} files ===");
+
+            var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
+
+            await Parallel.ForEachAsync(inputFiles, parallelOptions, async (filePath, token) =>
             {
-                string filePath = inputFiles[i];
                 string fileName = Path.GetFileName(filePath);
-
-                results.ytdsScanned++;
-
+                
                 YtdFile ytdFile;
                 try
                 {
@@ -518,48 +551,67 @@ namespace ToolKitV.Models
                 }
                 catch (Exception ex)
                 {
-                    log.LogWrite($"  ERROR loading {fileName}: {ex.Message}");
-                    goto Progress;
+                    log.LogWrite($"[ERROR] Failed to parse {fileName}: {ex.Message}");
+                    UpdateProgress();
+                    return;
                 }
 
                 bool ytdChanged = false;
+                int localFixedCount = 0;
 
                 for (int j = 0; j < ytdFile.TextureDict.Textures.Count; j++)
                 {
                     Texture texture = ytdFile.TextureDict.Textures[j];
-
                     bool isScriptRt = texture.Name.Contains("script_rt", StringComparison.OrdinalIgnoreCase);
-                    if (!isScriptRt || !IsTextureCompressed(texture))
-                        continue;
 
-                    log.LogWrite($"[FIX] {fileName} → decompressing script RT '{texture.Name}' ({texture.Format})");
+                    if (isScriptRt && IsTextureCompressed(texture))
+                    {
+                        if (!ytdChanged && doBackup)
+                        {
+                            lock (backupDirectory)
+                            {
+                                BackupFile(filePath, fileName, inputDirectory, backupDirectory, log);
+                            }
+                        }
 
-                    if (!ytdChanged && doBackup)
-                        BackupFile(filePath, fileName, inputDirectory, backupDirectory, log);
-
-                    ytdFile.TextureDict.Textures.data_items[j] = UncompressScriptTexture(texture);
-                    results.texturesFixed++;
-                    ytdChanged = true;
+                        ytdFile.TextureDict.Textures.data_items[j] = UncompressScriptTexture(texture);
+                        localFixedCount++;
+                        ytdChanged = true;
+                    }
                 }
 
                 if (ytdChanged)
                 {
                     byte[] newData = ytdFile.Save();
                     File.WriteAllBytes(filePath, newData);
-                    results.ytdsFixed++;
-                    log.LogWrite($"  Saved {fileName} with {results.texturesFixed} script RT(s) decompressed.");
+                    
+                    Interlocked.Increment(ref totalYtdsFixed);
+                    Interlocked.Add(ref totalTexturesFixed, localFixedCount);
+                    log.LogWrite($"[FIXED] {fileName} | Decompressed {localFixedCount} script RTs.");
                 }
 
-                Progress:
-                int progress = i * 100 / inputFiles.Length;
-                if (currentProgress != progress)
+                UpdateProgress();
+
+                void UpdateProgress()
                 {
-                    progressHandler?.Report((results, progress));
-                    currentProgress = progress;
-                }
-            }
+                    int currentCount = Interlocked.Increment(ref filesProcessed);
+                    int percent = (int)((double)currentCount / inputFiles.Length * 100);
 
-            progressHandler?.Report((results, 100));
+                    results.ytdsScanned = currentCount;
+                    results.ytdsFixed = totalYtdsFixed;
+                    results.texturesFixed = totalTexturesFixed;
+
+                    if (currentCount % Math.Max(1, inputFiles.Length / 100) == 0 || currentCount == inputFiles.Length)
+                    {
+                        progressHandler?.Report((results, percent));
+                    }
+                }
+            });
+
+            results.ytdsScanned = inputFiles.Length;
+            results.ytdsFixed = totalYtdsFixed;
+            results.texturesFixed = totalTexturesFixed;
+
             log.LogWrite("=== TGToolKit Script RT Fix finished ===");
             return results;
         }
@@ -567,40 +619,54 @@ namespace ToolKitV.Models
         // ─── Public API — Analyse ────────────────────────────────────────────────
 
         /// <summary>
-        /// Scans all .ytd files and returns aggregate stats.
-        /// Oversized threshold is based on virtual size (GPU budget) per FiveM conventions.
+        /// Asynchronously scans all YTDs using all available CPU cores.
         /// </summary>
         public static async Task<StatsData> GetStatsData(string path, IProgress<int>? updateHandler)
         {
             StatsData results = new();
             string[] inputFiles = Directory.GetFiles(path, "*.ytd", SearchOption.AllDirectories);
 
-            if (inputFiles.Length == 0)
-                return results;
+            if (inputFiles.Length == 0) return results;
 
             results.filesCount = inputFiles.Length;
-            int currentProgress = 0;
+            int filesProcessed = 0;
+            
+            double totalVirtualSize = 0;
+            double totalPhysicalSize = 0;
+            int totalOversizedCount = 0;
 
-            for (int i = 0; i < inputFiles.Length; i++)
+            var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
+
+            await Parallel.ForEachAsync(inputFiles, parallelOptions, async (filePath, token) =>
             {
-                (float virtualMB, float physicalMB) = GetFileSize(inputFiles[i], null);
+                (float virtualMB, float physicalMB) = GetFileSize(filePath, null);
 
-                results.virtualSize  += virtualMB;
-                results.physicalSize += physicalMB;
+                if (virtualMB > 0)
+                {
+                    // Use lock-free additions where possible or just a simple lock for the aggregate object
+                    // For doubles/ints, Interlocked is better but double requires a bit more care or a lock.
+                    // Since it's just 3 variables, a lock is fine and won't bottleneck.
+                    lock (inputFiles) 
+                    {
+                        totalVirtualSize += virtualMB;
+                        totalPhysicalSize += physicalMB;
+                        if (virtualMB > 16f) totalOversizedCount++;
+                    }
+                }
 
-                // FIX: use virtual size for FiveM streaming budget oversized check.
-                if (virtualMB > 16f)
-                    results.oversizedCount++;
-
-                int progress = i * 100 / inputFiles.Length;
-                if (currentProgress != progress)
+                int currentCount = Interlocked.Increment(ref filesProcessed);
+                int progress = (int)((double)currentCount / inputFiles.Length * 100);
+                
+                if (currentCount % Math.Max(1, inputFiles.Length / 100) == 0 || currentCount == inputFiles.Length)
                 {
                     updateHandler?.Report(progress);
-                    currentProgress = progress;
                 }
-            }
+            });
 
-            updateHandler?.Report(100);
+            results.virtualSize = (float)totalVirtualSize;
+            results.physicalSize = (float)totalPhysicalSize;
+            results.oversizedCount = totalOversizedCount;
+
             return results;
         }
 
