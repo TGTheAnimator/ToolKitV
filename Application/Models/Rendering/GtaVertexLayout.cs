@@ -40,30 +40,25 @@ namespace ToolKitV.Rendering
         {
             return type switch
             {
-                VertexComponentType.Half2      => Format.R16G16_Float,
-                VertexComponentType.Float      => Format.R32_Float,
-                VertexComponentType.Half4      => Format.R16G16B16A16_Float,
-                VertexComponentType.Float2     => Format.R32G32_Float,
                 VertexComponentType.Float3     => Format.R32G32B32_Float,
+                VertexComponentType.Float      => Format.R32_Float,
                 VertexComponentType.Float4     => Format.R32G32B32A32_Float,
-                VertexComponentType.UByte4     => Format.R8G8B8A8_UInt,
-                VertexComponentType.Colour     => Format.R8G8B8A8_UNorm,
+                VertexComponentType.Float2     => Format.R32G32_Float,
+                VertexComponentType.UByte4     => Format.R8G8B8A8_UNorm,
+                VertexComponentType.Dec3N      => Format.R10G10B10A2_UNorm, // Normal/Tangent compression
+                VertexComponentType.Half2      => Format.R16G16_Float,      // 16-bit UVs
+                VertexComponentType.Half4      => Format.R16G16B16A16_Float,
+                VertexComponentType.Colour     => Format.B8G8R8A8_UNorm,
                 VertexComponentType.RGBA8SNorm => Format.R8G8B8A8_SNorm,
                 _                              => Format.Unknown,
             };
         }
 
         /// <summary>
-        /// Builds InputElements for ONLY the semantics our VS shader uses:
-        ///   POSITION0, NORMAL0, TEXCOORD0
-        ///
-        /// Scans the full vertex declaration to find the exact byte offset of each
-        /// component in the packed vertex buffer — even when surrounded by BlendWeights,
-        /// Color, Tangent etc. that our shader doesn't need.
-        ///
-        /// Returns null if POSITION is not found (geometry can't be rendered).
+        /// Builds InputElements for semantics our VS shader uses, while returning
+        /// flags indicating which semantics were actually found in the geometry.
         /// </summary>
-        public static InputElement[]? GetLayoutForSimpleShader(
+        public static (InputElement[]? Elements, bool HasNorm, bool HasTex) GetLayoutForSimpleShader(
             VertexType componentsFlags,
             VertexDeclarationTypes componentsTypes)
         {
@@ -71,9 +66,11 @@ namespace ToolKitV.Rendering
             var flags  = (uint)componentsFlags;
 
             int offset = 0;
-            // Track per-semantic-NAME index (not per slot) so TEXCOORD at slots 6,7,8 get indices 0,1,2
             var semanticCounts = new Dictionary<string, int>();
-            var result = new List<InputElement>(3);
+            var result = new List<InputElement>();
+
+            bool hasNorm = false;
+            bool hasTex  = false;
 
             for (int k = 0; k < 16; k++)
             {
@@ -89,22 +86,19 @@ namespace ToolKitV.Rendering
                 semanticCounts.TryGetValue(semName, out int semIdx);
                 semanticCounts[semName] = semIdx + 1;
 
-                // Emit only POSITION/0, NORMAL/0, TEXCOORD/0 — matching VS_IN exactly
-                bool want = (semName == "POSITION" && semIdx == 0)
-                         || (semName == "NORMAL"   && semIdx == 0)
-                         || (semName == "TEXCOORD" && semIdx == 0);
-
-                if (want)
-                {
-                    var fmt = GetDxgiFormat(compType);
-                    if (fmt != Format.Unknown)
-                        result.Add(new InputElement(semName, semIdx, fmt, offset, 0));
-                }
+                if (semName == "POSITION" && semIdx == 0) result.Add(CreateElem(semName, semIdx, compType, offset));
+                if (semName == "NORMAL"   && semIdx == 0) { result.Add(CreateElem(semName, semIdx, compType, offset)); hasNorm = true; }
+                if (semName == "TEXCOORD" && semIdx == 0) { result.Add(CreateElem(semName, semIdx, compType, offset)); hasTex  = true; }
 
                 offset += size;
             }
 
-            return result.Count > 0 ? result.ToArray() : null;
+            return result.Count > 0 ? (result.ToArray(), hasNorm, hasTex) : (null, false, false);
+        }
+
+        private static InputElement CreateElem(string name, int idx, VertexComponentType type, int offset)
+        {
+            return new InputElement(name, idx, GetDxgiFormat(type), offset, 0);
         }
     }
 }

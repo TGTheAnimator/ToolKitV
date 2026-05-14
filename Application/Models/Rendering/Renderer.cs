@@ -39,10 +39,11 @@ namespace ToolKitV.Models.Rendering
     {
         public Buffer?      VertexBuffer;
         public Buffer?      IndexBuffer;
-        public InputLayout? Layout;
-        public int          VertexStride;
-        public int          IndexCount;
-        public string?      TextureName;  // resolved from ShaderGroup.ShaderMapping
+        public InputLayout?  Layout;
+        public VertexShader? ShaderToUse;  // bind-time permutation
+        public int           VertexStride;
+        public int           IndexCount;
+        public string?       TextureName;  // resolved from ShaderGroup.ShaderMapping
 
         public void Dispose()
         {
@@ -70,12 +71,12 @@ namespace ToolKitV.Models.Rendering
         public DX11ImageSource ImageSource => _imageSource;
 
         // Pipeline
-        private VertexShader?   _vs;
+        private VertexShader?   _vs_P, _vs_PN, _vs_PT, _vs_PNT;
+        private byte[]?         _vsBlob_P, _vsBlob_PN, _vsBlob_PT, _vsBlob_PNT;
         private PixelShader?    _ps;
         private Buffer          _cb;
         private SamplerState    _sampler;
         private RasterizerState _rs;
-        private byte[]?         _vsBlob;
 
         // Texture cache: name → SRV (case-insensitive, matches YTD names)
         private readonly Dictionary<string, ShaderResourceView> _textures
@@ -117,13 +118,16 @@ namespace ToolKitV.Models.Rendering
                                            "Models", "Rendering", "DefaultShader.hlsl");
             string hlsl = File.ReadAllText(hlslPath);
 
-            _vsBlob = SharpDX.D3DCompiler.ShaderBytecode.Compile(
-                hlsl, "VS", "vs_5_0", SharpDX.D3DCompiler.ShaderFlags.None).Bytecode.Data;
+            // Compile Pixel Shader once
             var psBlob = SharpDX.D3DCompiler.ShaderBytecode.Compile(
                 hlsl, "PS", "ps_5_0", SharpDX.D3DCompiler.ShaderFlags.None).Bytecode.Data;
-
-            _vs = new VertexShader(_device, _vsBlob);
             _ps = new PixelShader(_device, psBlob);
+
+            // Compile 4 Permutations of the Vertex Shader
+            (_vs_P,   _vsBlob_P)   = CompileVS(hlsl, false, false);
+            (_vs_PN,  _vsBlob_PN)  = CompileVS(hlsl, true,  false);
+            (_vs_PT,  _vsBlob_PT)  = CompileVS(hlsl, false, true);
+            (_vs_PNT, _vsBlob_PNT) = CompileVS(hlsl, true,  true);
 
             _sampler = new SamplerState(_device, new SamplerStateDescription
             {
@@ -144,6 +148,19 @@ namespace ToolKitV.Models.Rendering
                 IsScissorEnabled     = false,
                 IsMultisampleEnabled = false
             });
+        }
+
+        private (VertexShader vs, byte[] blob) CompileVS(string hlsl, bool hasNorm, bool hasTex)
+        {
+            var macros = new List<SharpDX.Direct3D.ShaderMacro>();
+            if (hasNorm) macros.Add(new SharpDX.Direct3D.ShaderMacro("HAS_NORMAL", "1"));
+            if (hasTex)  macros.Add(new SharpDX.Direct3D.ShaderMacro("HAS_TEXCOORD", "1"));
+
+            var bytecode = SharpDX.D3DCompiler.ShaderBytecode.Compile(
+                hlsl, "VS", "vs_5_0", SharpDX.D3DCompiler.ShaderFlags.None,
+                SharpDX.D3DCompiler.EffectFlags.None, macros.ToArray());
+
+            return (new VertexShader(_device, bytecode.Bytecode.Data), bytecode.Bytecode.Data);
         }
 
         // -------------------------------------------------------------------------
@@ -241,11 +258,21 @@ namespace ToolKitV.Models.Rendering
                     if (geom.IndexBuffer?.Indices == null) continue;
 
                     var declTypes    = vd.Info?.Types ?? VertexDeclarationTypes.GTAV1;
-                    var layoutElements = GtaVertexLayout.GetLayoutForSimpleShader(vd.VertexType, declTypes);
+                    var (layoutElements, hasNorm, hasTex) = GtaVertexLayout.GetLayoutForSimpleShader(vd.VertexType, declTypes);
                     if (layoutElements == null || layoutElements.Length == 0) continue;
 
+                    // Select the correct shader permutation based on geometry contents
+                    VertexShader? selectedShader = _vs_P;
+                    byte[]?       selectedBlob   = _vsBlob_P;
+
+                    if (hasNorm && hasTex) { selectedShader = _vs_PNT; selectedBlob = _vsBlob_PNT; }
+                    else if (hasNorm)      { selectedShader = _vs_PN;  selectedBlob = _vsBlob_PN; }
+                    else if (hasTex)       { selectedShader = _vs_PT;  selectedBlob = _vsBlob_PT; }
+
+                    if (selectedShader == null || selectedBlob == null) continue;
+
                     InputLayout layout;
-                    try { layout = new InputLayout(_device, _vsBlob, layoutElements); }
+                    try { layout = new InputLayout(_device, selectedBlob, layoutElements); }
                     catch { continue; }
 
                     var vbData = vd.VertexBytes;
@@ -273,6 +300,7 @@ namespace ToolKitV.Models.Rendering
                         VertexBuffer = vb,
                         IndexBuffer  = ib,
                         Layout       = layout,
+                        ShaderToUse  = selectedShader,
                         VertexStride = vd.VertexStride,
                         IndexCount   = geom.IndexBuffer.Indices.Length,
                         TextureName  = textureName
@@ -445,7 +473,8 @@ namespace ToolKitV.Models.Rendering
             };
             _context.UpdateSubresource(ref sc, _cb);
 
-            _context.VertexShader.Set(_vs);
+            _context.UpdateSubresource(ref sc, _cb);
+
             _context.VertexShader.SetConstantBuffer(0, _cb);
             _context.PixelShader.Set(_ps);
             _context.PixelShader.SetConstantBuffer(0, _cb);
@@ -470,6 +499,7 @@ namespace ToolKitV.Models.Rendering
                 _context.UpdateSubresource(ref sc, _cb);
                 _context.PixelShader.SetShaderResource(0, srv);
 
+                _context.VertexShader.Set(g.ShaderToUse);
                 _context.InputAssembler.InputLayout = g.Layout;
                 _context.InputAssembler.SetVertexBuffers(0,
                     new VertexBufferBinding(g.VertexBuffer, g.VertexStride, 0));
@@ -496,7 +526,10 @@ namespace ToolKitV.Models.Rendering
             _sampler.Dispose();
             _rs.Dispose();
             _cb.Dispose();
-            _vs?.Dispose();
+            _vs_P?.Dispose();
+            _vs_PN?.Dispose();
+            _vs_PT?.Dispose();
+            _vs_PNT?.Dispose();
             _ps?.Dispose();
             _rtv?.Dispose();
             _rtTex?.Dispose();
