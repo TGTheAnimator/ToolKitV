@@ -34,7 +34,7 @@ namespace ToolKitV
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             
             // Artificial delay to show splash screen
-            await Task.Delay(2000); 
+            await Task.Delay(2500); 
             
             var mainWindow = new MainWindow();
             MainWindow = mainWindow;

@@ -287,7 +287,7 @@
                        FontSize="10"
                        FontWeight="Bold"/>
             <TextBlock x:Name="VersionText"
-                       Text="v3.0.0"
+                       Text="v3.0.5"
                        Foreground="#25FFFFFF"
                        FontFamily="Fonts/#TT Norms"
                        FontSize="9"/>
@@ -295,7 +295,7 @@
                        Text="• UPDATE AVAILABLE"
                        Foreground="#4CFF70"
                        FontFamily="Fonts/#TT Norms"
-                       FontSize="9"
+                       FontSize="12"
                        FontWeight="Bold"
                        Margin="0 2 0 0"
                        Cursor="Hand"
